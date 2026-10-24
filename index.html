@@ -1,0 +1,1293 @@
+<title>VTS 開倉計算機</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: market verdict band on top, inputs left, live ticket right (sticky on desktop). */
+:root{
+  --bg:#edf0f3; --surface:#ffffff; --surface-2:#f5f7f9; --ink:#131c26; --ink-2:#4a5866; --ink-3:#6b7885;
+  --line:#d8dfe5; --line-2:#e8edf1;
+  --ic:#2c58c7; --ic-soft:#e3eafb; --cal:#9a3d7a; --cal-soft:#f6e5ef;
+  --good:#1f7a45; --good-soft:#e0f2e7; --warn:#8a5a00; --warn-soft:#fbefd2; --bad:#b3261e; --bad-soft:#fbe3e0;
+  --font-display:'Bricolage Grotesque','PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans','PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+  --font-num:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1319; --surface:#151d26; --surface-2:#1a242f; --ink:#e8edf2; --ink-2:#a9b6c2; --ink-3:#8493a0;
+    --line:#283644; --line-2:#202c38;
+    --ic:#7ea4ff; --ic-soft:#1a2a4d; --cal:#e48fc7; --cal-soft:#3a1f33;
+    --good:#62d092; --good-soft:#12301f; --warn:#e6b350; --warn-soft:#35280c; --bad:#ff9288; --bad-soft:#3a1815;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1319; --surface:#151d26; --surface-2:#1a242f; --ink:#e8edf2; --ink-2:#a9b6c2; --ink-3:#8493a0;
+  --line:#283644; --line-2:#202c38;
+  --ic:#7ea4ff; --ic-soft:#1a2a4d; --cal:#e48fc7; --cal-soft:#3a1f33;
+  --good:#62d092; --good-soft:#12301f; --warn:#e6b350; --warn-soft:#35280c; --bad:#ff9288; --bad-soft:#3a1815;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
+.app{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.2}
+p{margin:0}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ic);outline-offset:2px;border-radius:4px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:flex-end}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+h1{font-size:clamp(26px,4vw,36px);margin-top:2px}
+.lede{color:var(--ink-2);max-width:60ch;margin-top:6px}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;min-height:36px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.exnote{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 12px}
+
+/* panels */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.panel h2{font-size:17px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel h3{font-size:14px;color:var(--ink-2);margin:16px 0 8px;font-family:var(--font-body);font-weight:600}
+.hint{font-size:12.5px;color:var(--ink-3)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.field input,.field select{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;font-family:var(--font-num);font-size:14.5px;min-height:38px}
+.field input:focus{border-color:var(--ic);background:var(--surface)}
+.field .sub{font-size:11.5px;color:var(--ink-3)}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:9px;padding:3px;background:var(--surface-2);gap:2px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink-2)}
+.seg input:checked+label{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.seg input:focus-visible+label{outline:2px solid var(--ic)}
+details.adv{margin-top:14px;border-top:1px solid var(--line-2);padding-top:10px}
+details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:4px 0}
+details.adv .grid3{margin-top:10px}
+
+/* verdict band */
+.verdict{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+.vcard{border-radius:12px;padding:18px;border:1px solid var(--line);background:var(--surface-2)}
+.vcard.ic{background:var(--ic-soft);border-color:transparent}
+.vcard.cal{background:var(--cal-soft);border-color:transparent}
+.vlabel{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--ink-2)}
+.vname{font-family:var(--font-display);font-weight:700;font-size:clamp(32px,5vw,46px);line-height:1.05;margin:4px 0 6px}
+.vcard.ic .vname{color:var(--ic)} .vcard.cal .vname{color:var(--cal)}
+.vwhy{color:var(--ink);font-size:14px}
+.vnote{margin-top:10px;font-size:13px;padding:8px 10px;border-radius:8px;background:var(--surface);color:var(--ink-2)}
+.vnote.warn{background:var(--warn-soft);color:var(--warn)}
+.vnote.bad{background:var(--bad-soft);color:var(--bad)}
+.gauges{display:flex;flex-direction:column;gap:14px;margin-top:4px}
+.gauge .gl{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;gap:8px}
+.gauge .gl b{font-family:var(--font-num);font-weight:600}
+.track{position:relative;height:10px;border-radius:5px;background:var(--line-2)}
+.track .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px 0 0 5px}
+.track .fill.hi{background:var(--ic)} .track .fill.lo{background:var(--cal)}
+.track .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.track .tl{position:absolute;top:16px;transform:translateX(-50%);font-size:11px;color:var(--ink-3);white-space:nowrap;font-family:var(--font-num)}
+.gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-top:20px;font-family:var(--font-num)}
+.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
+
+/* main two-column */
+.cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sticky{position:sticky;top:12px}
+.tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px}
+.tag.ic{background:var(--ic-soft);color:var(--ic)} .tag.cal{background:var(--cal-soft);color:var(--cal)}
+
+/* results */
+.bigrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface-2);border-radius:10px;padding:12px}
+.stat .k{font-size:12px;color:var(--ink-2)}
+.stat .v{font-family:var(--font-num);font-size:clamp(20px,3vw,28px);font-weight:600;line-height:1.2;margin-top:2px}
+.stat .s{font-size:12px;color:var(--ink-3);margin-top:2px}
+.stat.main{background:var(--ink);color:var(--bg)} .stat.main .k,.stat.main .s{color:inherit;opacity:.78}
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--line-2);vertical-align:top}
+th{font-size:12px;color:var(--ink-3);font-weight:600}
+td.r,th.r{text-align:right}
+td .num{white-space:nowrap}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.lvl{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.lvl.g{background:var(--good)} .lvl.l{background:var(--bad)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
+.kv dt{color:var(--ink-2)} .kv dd{margin:0;text-align:right;font-family:var(--font-num)}
+.chartbox{margin-top:6px}
+.chartbox svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.readout{font-size:13px;color:var(--ink-2);min-height:22px;font-family:var(--font-num)}
+.svgt{fill:var(--ink-3);font-size:11px;font-family:var(--font-num)}
+[hidden]{display:none!important}
+.kltext{width:100%;min-height:96px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;font-family:var(--font-num);font-size:12.5px;color:var(--ink);resize:vertical}
+.klbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
+.klbar select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 8px;font-size:13px;min-height:36px;color:var(--ink)}
+.klstat{font-size:13px;margin-top:8px;color:var(--ink-2)} .klstat.bad{color:var(--bad)} .klstat.warn{color:var(--warn)}
+.kllegend{font-size:12.5px;color:var(--ink-2);margin-top:8px;line-height:1.7}
+.kllegend .sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin-right:4px}
+#klChart svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.svgt.k{fill:var(--ink)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.checks li{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:14px}
+.ci{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
+.ci.ok{background:var(--good-soft);color:var(--good)} .ci.warn{background:var(--warn-soft);color:var(--warn)}
+.ci.bad{background:var(--bad-soft);color:var(--bad)} .ci.info{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.checks .d{display:block;color:var(--ink-3);font-size:12.5px}
+.errs{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:2px}
+.empty{color:var(--ink-3);padding:24px 8px;text-align:center}
+textarea.plan{width:100%;min-height:150px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:10px;font-family:var(--font-num);font-size:12.5px;line-height:1.55;resize:vertical}
+.foot{font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
+.foot b{color:var(--ink-2)}
+@media (max-width:900px){
+  .verdict{grid-template-columns:1fr}
+  .cols{grid-template-columns:1fr}
+  .sticky{position:static}
+}
+@media (max-width:520px){
+  .grid3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bigrow{grid-template-columns:1fr 1fr}
+  .bigrow .stat.main{grid-column:1/-1}
+  .panel{padding:14px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <p class="eyebrow">VTS Iron Condor ／ Calendar</p>
+      <h1>VTS 開倉計算機</h1>
+      <p class="lede">依課程試算表的規則，判斷現在該做 Iron Condor 還是 Calendar，並算出口數、止盈與止損價位。</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btnExIC" type="button">載入範例：Iron Condor</button>
+      <button class="btn" id="btnExCal" type="button">載入範例：Calendar</button>
+      <button class="btn" id="btnClear" type="button">清空</button>
+    </div>
+  </header>
+  <div class="exnote" id="exnote" hidden>目前顯示的是課程試算表裡的範例交易，不是你的部位。修改任何欄位後這行提示會消失。</div>
+
+  <!-- 1. market -->
+  <section class="panel">
+    <h2>1. 市場環境 <span class="hint">Iron Condor 用在中高波動，Calendar 用在低波動</span></h2>
+    <div class="verdict">
+      <div>
+        <div class="grid3">
+          <div class="field"><label for="baro">VTS Volatility Barometer（%）</label><input id="baro" type="number" inputmode="decimal" step="any" min="0" max="100"><span class="sub">輸入 48.6 代表 48.6%</span></div>
+          <div class="field"><label for="ivp">IV Percentile（%）</label><input id="ivp" type="number" inputmode="decimal" step="any" min="0" max="100"><span class="sub">券商選擇權統計頁</span></div>
+          <div class="field"><label for="vix">VIX 指數</label><input id="vix" type="number" inputmode="decimal" step="any" min="0"><span class="sub">僅供參考，不影響判定</span></div>
+        </div>
+        <div class="gauges" id="gauges" style="margin-top:18px"></div>
+        <div class="gscale"><span>0%</span><span>百分位</span><span>100%</span></div>
+        <details class="adv">
+          <summary>切換門檻</summary>
+          <div class="seg" id="thrPresets" style="margin-top:8px">
+            <input type="radio" name="thrp" id="tp25" value="25"><label for="tp25">25%　試算表註解</label>
+            <input type="radio" name="thrp" id="tp30" value="30"><label for="tp30">30%　PDF 一</label>
+            <input type="radio" name="thrp" id="tp33" value="33"><label for="tp33">33%　PDF 二</label>
+          </div>
+          <div class="grid3">
+            <div class="field"><label for="thr">門檻（百分位 %）</label><input id="thr" type="number" inputmode="decimal" step="any" value="25"></div>
+            <div class="field"><label for="near">「接近門檻」範圍（±點）</label><input id="near" type="number" inputmode="decimal" step="any" value="3"><span class="sub">工具預設，非課程規則</span></div>
+            <div class="field"><label for="vixref">VIX 參考值</label><input id="vixref" type="number" inputmode="decimal" step="any" value="15"><span class="sub">PDF 提到，待驗證</span></div>
+          </div>
+        </details>
+      </div>
+      <div class="vcard" id="vcard"></div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <!-- inputs -->
+    <div class="col">
+      <section class="panel">
+        <h2>2. 帳戶與標的</h2>
+        <div class="grid2">
+          <div class="field"><label for="nlv">總淨清算價值（美元）</label><input id="nlv" type="number" inputmode="decimal" step="any" min="0"></div>
+          <div class="field"><label for="ticker">標的代號</label><input id="ticker" type="text" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
+          <div class="field"><label for="spot">現價</label><input id="spot" type="number" inputmode="decimal" step="any" min="0"></div>
+          <div class="field"><label for="dte">到期天數（短腳）</label><input id="dte" type="number" inputmode="numeric" step="1" min="0"><span class="sub">含週末與假日的日曆天數</span></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>3. 交易內容
+          <span class="seg" id="modeSeg" style="margin-left:auto">
+            <input type="radio" name="mode" id="m_auto" value="auto"><label for="m_auto">依環境判定</label>
+            <input type="radio" name="mode" id="m_ic" value="ic"><label for="m_ic">Iron Condor</label>
+            <input type="radio" name="mode" id="m_cal" value="cal"><label for="m_cal">Calendar</label>
+          </span>
+        </h2>
+        <p class="hint" id="modeHint" style="margin:-4px 0 12px"></p>
+
+        <div id="grpIC">
+          <div class="grid2">
+            <div class="field"><label for="lp">長 Put 履約價</label><input id="lp" type="number" inputmode="decimal" step="any"></div>
+            <div class="field"><label for="sp">短 Put 履約價</label><input id="sp" type="number" inputmode="decimal" step="any"></div>
+            <div class="field"><label for="sc">短 Call 履約價</label><input id="sc" type="number" inputmode="decimal" step="any"></div>
+            <div class="field"><label for="lc">長 Call 履約價</label><input id="lc" type="number" inputmode="decimal" step="any"></div>
+            <div class="field"><label for="credit">收取權利金（每股）</label><input id="credit" type="number" inputmode="decimal" step="any" min="0"></div>
+            <div class="field"><label for="dput">短 Put Delta（選填）</label><input id="dput" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
+            <div class="field"><label for="dcall">短 Call Delta（選填）</label><input id="dcall" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
+          </div>
+        </div>
+
+        <div id="grpCal">
+          <div class="grid2">
+            <div class="field"><label for="kstrike">履約價（Put，長短腳相同）</label><input id="kstrike" type="number" inputmode="decimal" step="any"></div>
+            <div class="field"><label for="debit">支付權利金（每股）</label><input id="debit" type="number" inputmode="decimal" step="any" min="0"></div>
+            <div class="field"><label for="dtefar">長腳到期天數（選填）</label><input id="dtefar" type="number" inputmode="numeric" step="1" min="0"><span class="sub">應比短腳多約一個月</span></div>
+            <div class="field"><label for="ivest">遠月隱含波動率 IV（%，選填）</label><input id="ivest" type="number" inputmode="decimal" step="any" min="0"><span class="sub">用來估計最大獲利；空白時用 VIX</span></div>
+          </div>
+        </div>
+
+        <h3>部位與分層</h3>
+        <div class="grid3">
+          <div class="field"><label for="layers">目前已開的層數</label><input id="layers" type="number" inputmode="numeric" step="1" min="0"></div>
+          <div class="field"><label for="existpx">同標的同到期日既有部位的開倉價</label><input id="existpx" type="number" inputmode="decimal" step="any" min="0"><span class="sub">選填，用來檢查 4% 規則</span></div>
+          <div class="field"><label for="ovr">自訂口數（選填）</label><input id="ovr" type="number" inputmode="numeric" step="1" min="0"><span class="sub">留空則用建議口數</span></div>
+        </div>
+
+        <details class="adv">
+          <summary>進階設定（預設值來自試算表）</summary>
+          <div class="grid3">
+            <div class="field"><label for="allocIC">Iron Condor 單筆上限 %</label><input id="allocIC" type="number" step="any" value="3"></div>
+            <div class="field"><label for="allocCal">Calendar 單筆上限 %</label><input id="allocCal" type="number" step="any" value="2"></div>
+            <div class="field"><label for="maxTrades">最大同時筆數</label><input id="maxTrades" type="number" step="1" value="3"></div>
+            <div class="field"><label for="gainIC">Iron Condor 止盈 %</label><input id="gainIC" type="number" step="any" value="50"><span class="sub">權利金衰減幅度</span></div>
+            <div class="field"><label for="lossIC">Iron Condor 止損 %</label><input id="lossIC" type="number" step="any" value="50"><span class="sub">權利金增加幅度</span></div>
+            <div class="field"><label for="moveRule">加層所需價格移動 %</label><input id="moveRule" type="number" step="any" value="4"></div>
+            <div class="field"><label for="gainCal">Calendar 止盈 %</label><input id="gainCal" type="number" step="any" value="25"></div>
+            <div class="field"><label for="lossCal">Calendar 止損 %</label><input id="lossCal" type="number" step="any" value="25"></div>
+            <div class="field"><label for="fee">手續費（每口每腿）</label><input id="fee" type="number" step="any" value="0.65"><span class="sub">試算表以 ThinkorSwim 計</span></div>
+            <div class="field"><label for="stratAlloc">策略佔組合 %</label><input id="stratAlloc" type="number" step="any" value="20"><span class="sub">試算表用 20%，課程 L10 寫 25%</span></div>
+            <div class="field"><label for="dteMin">天期下限</label><input id="dteMin" type="number" step="1" value="45"></div>
+            <div class="field"><label for="dteMax">天期上限</label><input id="dteMax" type="number" step="1" value="75"></div>
+            <div class="field"><label for="dTarget">目標 Delta</label><input id="dTarget" type="number" step="any" value="0.15"></div>
+            <div class="field"><label for="dTol">Delta 容許誤差</label><input id="dTol" type="number" step="any" value="0.03"><span class="sub">工具預設，非課程規則</span></div>
+            <div class="field"><label for="atmTol">Calendar 近平價容許 %</label><input id="atmTol" type="number" step="any" value="1"><span class="sub">工具預設，非課程規則</span></div>
+            <div class="field"><label for="rate">無風險利率 %（估計最大獲利用）</label><input id="rate" type="number" step="any" value="4"><span class="sub">工具假設，影響很小</span></div>
+          </div>
+        </details>
+      </section>
+    </div>
+
+    <!-- results -->
+    <div class="col sticky">
+      <section class="panel" id="results"></section>
+    </div>
+  </div>
+
+  <section class="panel" id="kline" style="margin-top:16px">
+    <h2>4. K 線價格資料來源 <span class="hint">K 線圖會顯示在上方「到期損益」圖的正下方</span></h2>
+    <div class="grid2">
+      <div class="field"><label for="klProv">行情來源</label>
+        <select id="klProv"><option value="twelve">Twelve Data（免費金鑰，美股即時）</option><option value="yahoo">Yahoo Finance（免金鑰，常被瀏覽器擋下）</option></select></div>
+      <div class="field" id="klKeyWrap"><label for="klKey">Twelve Data API 金鑰</label>
+        <input id="klKey" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的免費金鑰"><span class="sub">只存在這個瀏覽器，不會放進頁面</span></div>
+    </div>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn primary" id="klLive" type="button">抓取即時行情</button>
+      <label class="btn" for="klAuto" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="klAuto"> <span id="klAutoTxt">自動更新</span></label>
+    </div>
+    <p class="hint" id="klProvNote" style="margin:8px 0 10px"></p>
+    <details class="adv" id="klData" open>
+      <summary>價格資料（CSV：Date、Open、High、Low、Close）</summary>
+      <p class="hint" style="margin:8px 0">可直接貼上 Yahoo Finance、Stooq 或 ThinkorSwim 匯出的日 K，也可以上傳 .csv。此頁不會自動抓行情，資料只存在你的瀏覽器。</p>
+      <textarea class="kltext" id="klText" spellcheck="false" aria-label="日K線 CSV 資料" placeholder="Date,Open,High,Low,Close&#10;2026-10-22,768.2,772.5,766.9,770.3"></textarea>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn primary" id="klLoad" type="button">載入資料</button>
+        <label class="btn" for="klFile" style="display:inline-flex;align-items:center">上傳 CSV</label><input id="klFile" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
+        <button class="btn" id="klSpot" type="button" disabled>用最後收盤價填入現價</button>
+        <button class="btn" id="klClear" type="button">清除資料</button>
+      </div>
+    </details>
+    <div class="klstat" id="klStat" role="status"></div>
+  </section>
+
+  <footer class="foot">
+    <p><b>規則來源：</b>以課程試算表（VTS_Iron_Condor_strategy.xlsx）的儲存格註解與公式為準：Iron Condor 單筆 3%、Calendar 單筆 2%、最多 3 筆、Iron Condor 止盈 0.5 倍與止損 1.5 倍權利金、Calendar 止盈 1.25 倍與止損 0.75 倍權利金、4% 加層規則、短腳 45–75 天。Delta 0.15、標的清單、波動率第 25 百分位也都出自這些註解。</p>
+    <p><b>PDF 補充：</b>VIX 15、IV Percentile 30% 或 33% 等數字只出現在 AI 彙整的 PDF，與試算表註解不同，這裡只當參考或可調門檻。</p>
+    <p>Calendar 的最大獲利沒有固定公式，這裡是用 Black-Scholes 做的模型估計，並非試算表或課程的數字。這是依規則做的機械計算，不是投資建議。Volatility Barometer 需要 VTS 訂閱資料。實際下單前請確認報價、保證金與你的券商手續費。</p>
+  </footer>
+</div>
+
+<script id="calc-core">
+/* Pure calculation core. No DOM access, so it can be tested in Node. */
+const VTS = (function(){
+  const fl = x => Math.floor(x + 1e-9);
+  const isNum = v => typeof v === 'number' && isFinite(v);
+
+  /* Volatility regime: Barometer and IV percentile vs the percentile threshold. */
+  function envVerdict(p){
+    const thr = isNum(p.thr) ? p.thr : 25;
+    const margin = isNum(p.margin) ? p.margin : 3;
+    const sig = [];
+    if (isNum(p.baro)) sig.push({key:'baro', label:'VTS Volatility Barometer', value:p.baro});
+    if (isNum(p.ivp))  sig.push({key:'ivp',  label:'IV Percentile', value:p.ivp});
+    sig.forEach(s => { s.high = s.value >= thr; s.near = Math.abs(s.value - thr) <= margin; });
+    const out = {thr, margin, signals:sig, strategy:null, quality:'none', near:false, basis:null};
+    if (!sig.length) return out;
+    out.near = sig.some(s => s.near);
+    const highs = sig.filter(s => s.high).length;
+    if (highs === sig.length){ out.strategy='IC'; out.quality = sig.length>1 ? 'agree' : 'single'; }
+    else if (highs === 0){ out.strategy='CAL'; out.quality = sig.length>1 ? 'agree' : 'single'; }
+    else {
+      out.quality = 'split';
+      const b = sig.find(s => s.key==='baro');
+      out.basis = 'baro';
+      out.strategy = b.high ? 'IC' : 'CAL';
+    }
+    if (isNum(p.vix)) out.vix = {value:p.vix, ref:p.vixRef, above: isNum(p.vixRef) ? p.vix > p.vixRef : null};
+    return out;
+  }
+
+  function exitsCommon(r, p, perShareGain, perShareLoss){
+    r.gainDollar = perShareGain * 100 * r.contracts;
+    r.lossDollar = -perShareLoss * 100 * r.contracts;
+    r.gainNet = r.gainDollar - r.fees;
+    r.lossNet = r.lossDollar - r.fees;
+    r.gainPortPct = r.gainNet / p.nlv;
+    r.lossPortPct = r.lossNet / p.nlv;
+    if (isNum(p.stratAlloc) && p.stratAlloc > 0){
+      r.gainStratPct = r.gainNet / (p.nlv * p.stratAlloc/100);
+      r.lossStratPct = r.lossNet / (p.nlv * p.stratAlloc/100);
+    }
+  }
+
+  function sizeIC(p){
+    const need = ['nlv','spot','lp','sp','sc','lc','credit'];
+    const miss = need.filter(k => !isNum(p[k]));
+    if (miss.length) return {ready:false, missing:miss};
+    const errors = [];
+    if (!(p.lp < p.sp && p.sp < p.sc && p.sc < p.lc)) errors.push('履約價順序應為：長 Put ＜ 短 Put ＜ 短 Call ＜ 長 Call。');
+    if (p.credit <= 0) errors.push('權利金必須大於 0。');
+    const putW = p.sp - p.lp, callW = p.lc - p.sc;
+    const width = Math.max(putW, callW);
+    if (width <= 0) errors.push('翼寬必須大於 0。');
+    if (p.credit >= width && width > 0) errors.push('收取權利金不能大於或等於翼寬。');
+    if (errors.length) return {ready:false, errors};
+
+    const gain = (isNum(p.gainPct) ? p.gainPct : 50)/100;
+    const loss = (isNum(p.lossPct) ? p.lossPct : 50)/100;
+    const allocPct = (isNum(p.allocPct) ? p.allocPct : 3)/100;
+    const fee = isNum(p.fee) ? p.fee : 0.65;
+    const move = (isNum(p.movePct) ? p.movePct : 4)/100;
+
+    const r = {ready:true, type:'IC', putW, callW, width, errors:[]};
+    r.maxLossPer = (width - p.credit) * 100;
+    r.allocDollar = p.nlv * allocPct;
+    r.recContracts = fl(r.allocDollar / r.maxLossPer);
+    r.contracts = isNum(p.ovr) ? Math.max(0, Math.round(p.ovr)) : r.recContracts;
+    r.overridden = isNum(p.ovr);
+    r.maxLoss = r.maxLossPer * r.contracts;
+    r.maxProfit = p.credit * 100 * r.contracts;
+    r.util = r.maxLoss / p.nlv;
+    r.gainPrem = p.credit * (1 - gain);
+    r.lossPrem = p.credit * (1 + loss);
+    r.fees = r.contracts * 4 * 2 * fee;
+    r.feePct = r.maxLoss > 0 ? r.fees / r.maxLoss : null;
+    exitsCommon(r, p, p.credit*gain, p.credit*loss);
+    r.popSimple = (width - p.credit) / width;
+    r.popDelta = (isNum(p.dPut) && isNum(p.dCall)) ? 1 - p.dPut - p.dCall : null;
+    r.distPut = (p.sp - p.spot) / p.spot;
+    r.distCall = (p.sc - p.spot) / p.spot;
+    r.bePut = p.sp - p.credit;
+    r.beCall = p.sc + p.credit;
+    r.lowThr = p.spot * (1 - move);
+    r.highThr = p.spot * (1 + move);
+    r.rr = r.maxLoss > 0 ? r.maxProfit / r.maxLoss : null;
+    return r;
+  }
+
+  function sizeCal(p){
+    const need = ['nlv','spot','kstrike','debit'];
+    const miss = need.filter(k => !isNum(p[k]));
+    if (miss.length) return {ready:false, missing:miss};
+    const errors = [];
+    if (p.debit <= 0) errors.push('支付權利金必須大於 0。');
+    if (errors.length) return {ready:false, errors};
+
+    const gain = (isNum(p.gainPct) ? p.gainPct : 25)/100;
+    const loss = (isNum(p.lossPct) ? p.lossPct : 25)/100;
+    const allocPct = (isNum(p.allocPct) ? p.allocPct : 2)/100;
+    const fee = isNum(p.fee) ? p.fee : 0.65;
+    const move = (isNum(p.movePct) ? p.movePct : 4)/100;
+
+    const r = {ready:true, type:'CAL', errors:[]};
+    r.maxLossPer = p.debit * 100;
+    r.allocDollar = p.nlv * allocPct;
+    r.recContracts = fl(r.allocDollar / r.maxLossPer);
+    r.contracts = isNum(p.ovr) ? Math.max(0, Math.round(p.ovr)) : r.recContracts;
+    r.overridden = isNum(p.ovr);
+    r.maxLoss = r.maxLossPer * r.contracts;
+    r.util = r.maxLoss / p.nlv;
+    r.gainPrem = p.debit * (1 + gain);
+    r.lossPrem = p.debit * (1 - loss);
+    r.fees = r.contracts * 2 * 2 * fee;
+    r.feePct = r.maxLoss > 0 ? r.fees / r.maxLoss : null;
+    exitsCommon(r, p, p.debit*gain, p.debit*loss);
+    r.dist = (p.kstrike - p.spot) / p.spot;
+    r.lowThr = p.spot * (1 - move);
+    r.highThr = p.spot * (1 + move);
+    return r;
+  }
+
+  /* Expiry P/L in dollars for the whole position. */
+  function payoffIC(p, r, price){
+    const putLoss = Math.min(Math.max(p.sp - price, 0), r.putW);
+    const callLoss = Math.min(Math.max(price - p.sc, 0), r.callW);
+    return (p.credit - putLoss - callLoss) * 100 * r.contracts;
+  }
+
+  /* ---- Calendar: model estimate of P/L when the near leg expires (Black-Scholes) ---- */
+  function ncdf(x){
+    const t = 1/(1+0.2316419*Math.abs(x)), d = 0.3989422804014327*Math.exp(-x*x/2);
+    const q = d*t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+    return x > 0 ? 1-q : q;
+  }
+  function bsPut(S,K,T,r,sig){
+    if (T <= 0) return Math.max(K-S,0);
+    if (sig <= 0) return Math.max(K*Math.exp(-r*T)-S,0);
+    const sd = sig*Math.sqrt(T), d1 = (Math.log(S/K)+(r+sig*sig/2)*T)/sd, d2 = d1-sd;
+    return K*Math.exp(-r*T)*ncdf(-d2) - S*ncdf(-d1);
+  }
+  /* Per-share P/L at near expiry: long far put (value left) - short near put (intrinsic) - debit. */
+  function calExpiry(q){
+    const T = q.daysRem/365;
+    const fn = S => Math.max(bsPut(S,q.K,T,q.rate,q.iv), q.K-S, 0) - Math.max(q.K-S,0) - q.debit; /* long put can be sold any time: value >= intrinsic, so loss <= debit */
+    const lo = q.K*0.8, hi = q.K*1.2, n = 2400, step = (hi-lo)/n;
+    let maxPs = -Infinity, maxPrice = q.K, beLow = null, beHigh = null, prevS = lo, prevV = fn(lo);
+    const lossThr = -0.9*q.debit; let lossLow = null, lossHigh = null; /* prices where the loss is >= 90% of the debit */
+    for (let i = 1; i <= n; i++){
+      const S = lo + i*step, v = fn(S);
+      if (S < q.K){ if (v <= lossThr) lossLow = S; } else if (lossHigh === null && v <= lossThr) lossHigh = S;
+      if (v > maxPs){ maxPs = v; maxPrice = S; }
+      if (prevV < 0 && v >= 0 && beLow === null) beLow = prevS + (0-prevV)/(v-prevV)*step;
+      if (prevV >= 0 && v < 0) beHigh = prevS + (0-prevV)/(v-prevV)*step;
+      prevS = S; prevV = v;
+    }
+    if (maxPs < 0){ beLow = null; beHigh = null; }
+    return {fn, maxPs, maxPrice, beLow, beHigh, lossLow, lossHigh};
+  }
+
+  /* ---- Daily OHLC CSV parsing (Yahoo, Stooq, ThinkorSwim exports, plain Date,Open,High,Low,Close) ---- */
+  function parseDate(str){
+    const t = String(str||'').trim().replace(/^"|"$/g,'');
+    let y, m, d, k;
+    if ((k = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(t))){ y = +k[1]; m = +k[2]; d = +k[3]; }
+    else if ((k = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t))){ m = +k[1]; d = +k[2]; y = +k[3]; }
+    else return null;
+    const dt = new Date(Date.UTC(y, m-1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m-1 || dt.getUTCDate() !== d) return null;
+    return dt.toISOString().slice(0,10);
+  }
+  function parseOHLC(text){
+    const out = {rows:[], skipped:0, error:null};
+    const lines = String(text||'').replace(/\r/g,'').split('\n').map(x => x.trim()).filter(Boolean);
+    if (lines.length < 2){ out.error = '資料不夠，至少要有一列標題和幾列價格。'; return out; }
+    const delim = [',','\t',';'].map(c => [c, lines[0].split(c).length]).sort((a,b) => b[1]-a[1])[0][0];
+    const split = line => { const res = []; let cur = '', q = false;
+      for (const ch of line){ if (ch === '"') q = !q; else if (ch === delim && !q){ res.push(cur); cur = ''; } else cur += ch; }
+      res.push(cur); return res.map(x => x.trim()); };
+    const num = x => { const t = String(x).replace(/[$,\s"]/g,''); if (t === '') return NaN; const v = Number(t); return isFinite(v) ? v : NaN; };
+    let idx = {date:0, open:1, high:2, low:3, close:4}, start = 0;
+    const first = split(lines[0]);
+    if (parseDate(first[0]) === null){
+      start = 1;
+      const find = re => first.findIndex(h => re.test(h.toLowerCase().replace(/[\s_]/g,'')));
+      idx = {date:find(/^(date|datetime|time|日期|時間)/), open:find(/^(open|開盤)/), high:find(/^(high|最高)/), low:find(/^(low|最低)/),
+             close:find(/^(close|收盤)/)};
+      if (idx.close < 0) idx.close = find(/^adjclose/);
+      const miss = Object.keys(idx).filter(k => idx[k] < 0);
+      if (miss.length){ out.error = '標題列找不到這些欄位：' + miss.join('、') + '。需要 Date、Open、High、Low、Close。'; return out; }
+    }
+    const map = new Map();
+    for (let i = start; i < lines.length; i++){
+      const c = split(lines[i]);
+      const d = parseDate(c[idx.date]), o = num(c[idx.open]), h = num(c[idx.high]), l = num(c[idx.low]), cl = num(c[idx.close]);
+      if (d === null || [o,h,l,cl].some(v => !isFinite(v) || v <= 0)){ out.skipped++; continue; }
+      map.set(d, {d, o, h:Math.max(h,o,cl), l:Math.min(l,o,cl), c:cl});
+    }
+    out.rows = Array.from(map.values()).sort((a,b) => a.d < b.d ? -1 : 1);
+    if (out.rows.length < 5){ out.error = '能讀到的價格列太少（' + out.rows.length + ' 列），請確認格式。'; out.rows = []; }
+    return out;
+  }
+
+  /* ---- Key price levels of the position at the short leg's expiry ---- */
+  function keyLevels(active, p, r){
+    if (!r || !r.ready) return null;
+    const c = Math.max(r.contracts || 0, 1);
+    if (active === 'IC'){
+      const rr = Object.assign({}, r, {contracts:c});
+      return {type:'IC', fn: v => payoffIC(p, rr, v),
+        items:[
+          {kind:'maxloss',   price:p.lp,     label:'最大虧損', sign:'≤'},
+          {kind:'be',        price:r.bePut,  label:'損益兩平', sign:''},
+          {kind:'maxprofit', price:p.sp,     label:'最大獲利', sign:'≥'},
+          {kind:'maxprofit', price:p.sc,     label:'最大獲利', sign:'≤'},
+          {kind:'be',        price:r.beCall, label:'損益兩平', sign:''},
+          {kind:'maxloss',   price:p.lc,     label:'最大虧損', sign:'≥'}],
+        zones:[
+          {lo:-Infinity, hi:p.lp, kind:'maxloss'}, {lo:p.lp, hi:r.bePut, kind:'loss'},
+          {lo:r.bePut, hi:p.sp, kind:'profit'}, {lo:p.sp, hi:p.sc, kind:'maxprofit'},
+          {lo:p.sc, hi:r.beCall, kind:'profit'}, {lo:r.beCall, hi:p.lc, kind:'loss'}, {lo:p.lc, hi:Infinity, kind:'maxloss'}]};
+    }
+    const e = r.est;
+    if (!e) return {type:'CAL', fn:null, noModel:true,
+      items:[{kind:'maxprofit', price:p.kstrike, label:'最大獲利約在', sign:''}], zones:[]};
+    const z = [];
+    const hasProfit = e.maxPs > 0 && e.beLow != null && e.beHigh != null;
+    if (hasProfit){
+      const ll = e.lossLow != null ? Math.min(e.lossLow, e.beLow) : e.beLow, lh = e.lossHigh != null ? Math.max(e.lossHigh, e.beHigh) : e.beHigh;
+      z.push({lo:-Infinity, hi:ll, kind:'maxloss'}, {lo:ll, hi:e.beLow, kind:'loss'}, {lo:e.beLow, hi:e.beHigh, kind:'profit'},
+             {lo:e.beHigh, hi:lh, kind:'loss'}, {lo:lh, hi:Infinity, kind:'maxloss'});
+    } else z.push({lo:-Infinity, hi:Infinity, kind:'loss'});
+    const items = [];
+    if (hasProfit){
+      if (e.lossLow != null) items.push({kind:'maxloss', price:e.lossLow, label:'近最大虧損', sign:'≤'});
+      items.push({kind:'be', price:e.beLow, label:'損益兩平', sign:''}, {kind:'maxprofit', price:e.maxPrice, label:'最大獲利', sign:''},
+                 {kind:'be', price:e.beHigh, label:'損益兩平', sign:''});
+      if (e.lossHigh != null) items.push({kind:'maxloss', price:e.lossHigh, label:'近最大虧損', sign:'≥'});
+    }
+    return {type:'CAL', fn: v => e.fn(v)*100*c, items, zones:z, model:true};
+  }
+
+  /* ---- Yahoo Finance chart JSON -> daily rows ---- */
+  function parseYahoo(j){
+    const out = {rows:[], error:null, meta:null};
+    const res = j && j.chart && j.chart.result && j.chart.result[0];
+    if (!res){ const d = j && j.chart && j.chart.error && j.chart.error.description; out.error = d || '找不到這個代號的資料。'; return out; }
+    const ts = res.timestamp || [], q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
+    const off = (res.meta && res.meta.gmtoffset) || 0, map = new Map();
+    ts.forEach((t, i) => {
+      const o = q.open && q.open[i], h = q.high && q.high[i], l = q.low && q.low[i], c = q.close && q.close[i];
+      if ([o,h,l,c].some(v => typeof v !== 'number' || !isFinite(v) || v <= 0)) return;
+      const d = new Date((t + off)*1000).toISOString().slice(0,10);
+      map.set(d, {d, o, h:Math.max(h,o,c), l:Math.min(l,o,c), c});
+    });
+    out.rows = Array.from(map.values()).sort((a,b) => a.d < b.d ? -1 : 1);
+    if (out.rows.length < 5){ out.error = '拿到的價格列太少（' + out.rows.length + ' 列）。'; out.rows = []; }
+    if (res.meta) out.meta = {symbol:res.meta.symbol, price:res.meta.regularMarketPrice, time:res.meta.regularMarketTime, currency:res.meta.currency};
+    return out;
+  }
+
+  /* ---- Twelve Data time_series JSON -> daily rows ---- */
+  function parseTwelve(j, minRows){
+    const out = {rows:[], error:null, meta:null, code:null};
+    if (!j || typeof j !== 'object'){ out.error = '行情來源回傳了無法辨識的內容。'; return out; }
+    if (j.status === 'error' || !Array.isArray(j.values)){ out.code = j.code || null; out.error = j.message || '行情來源回報錯誤。'; return out; }
+    const map = new Map();
+    j.values.forEach(v => {
+      const o = Number(v.open), h = Number(v.high), l = Number(v.low), c = Number(v.close), d = parseDate(v.datetime);
+      if (d === null || [o,h,l,c].some(x => !isFinite(x) || x <= 0)) return;
+      map.set(d, {d, o, h:Math.max(h,o,c), l:Math.min(l,o,c), c});
+    });
+    out.rows = Array.from(map.values()).sort((a,b) => a.d < b.d ? -1 : 1);
+    const need = typeof minRows === 'number' ? minRows : 5;
+    if (out.rows.length < need){ out.error = '拿到的價格列太少（' + out.rows.length + ' 列）。'; out.rows = []; }
+    if (j.meta) out.meta = {symbol:j.meta.symbol, currency:j.meta.currency, exchange:j.meta.exchange};
+    return out;
+  }
+
+  return {envVerdict, sizeIC, sizeCal, payoffIC, bsPut, calExpiry, parseOHLC, keyLevels, parseYahoo, parseTwelve};
+})();
+</script>
+
+<script id="calc-ui">
+(function(){
+  const $ = id => document.getElementById(id);
+  const IDS = ['baro','ivp','vix','thr','near','vixref','nlv','ticker','spot','dte','lp','sp','sc','lc','credit','dput','dcall',
+    'kstrike','debit','dtefar','layers','existpx','ovr','allocIC','allocCal','maxTrades','gainIC','lossIC','moveRule','gainCal','lossCal',
+    'fee','stratAlloc','dteMin','dteMax','dTarget','dTol','atmTol','ivest','rate'];
+  const DEFAULTS = {thr:'25',near:'3',vixref:'15',allocIC:'3',allocCal:'2',maxTrades:'3',gainIC:'50',lossIC:'50',moveRule:'4',
+    gainCal:'25',lossCal:'25',rate:'4',fee:'0.65',stratAlloc:'20',dteMin:'45',dteMax:'75',dTarget:'0.15',dTol:'0.03',atmTol:'1'};
+  /* Example rows come from the course spreadsheet (IC example row; Calendar paper-trade row). */
+  const EX_IC = {baro:'48.56',ivp:'28',vix:'20.34',nlv:'274395.3',ticker:'SPY',spot:'393.12',dte:'58',lp:'365',sp:'370',sc:'435',lc:'440',
+    credit:'1.2',dput:'0.15',dcall:'0.15',layers:'0',mode:'auto'};
+  const EX_CAL = {baro:'14.4',ivp:'5',vix:'14.51',nlv:'1150566.8',ticker:'SPY',spot:'770.33',dte:'22',kstrike:'770',debit:'4.94',
+    dtefar:'',layers:'0',mode:'auto'};
+  const LIQUID = ['SPY','QQQ','IWM','TLT','GLD','SPX','RUT','NDX'];
+  const KEY = 'vts-calc-v1';
+  let isExample = false;
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const numOf = id => { const v = $(id).value.trim(); if (v==='') return null; const n = Number(v); return isFinite(n) ? n : null; };
+  const r2 = x => Math.round(x*100 + (x>=0?1e-9:-1e-9))/100;
+  const usd = (x, d=0) => (x<0?'-':'') + '$' + Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const sgn = x => (x>0?'+':'') + usd(x);
+  const prem = x => '$' + r2(x).toFixed(2);
+  const pct = (x, d=2) => (x*100).toFixed(d) + '%';
+  const spct = (x, d=2) => (x>0?'+':'') + (x*100).toFixed(d) + '%';
+  const compact = v => { const a = Math.abs(v); const s = a>=1000 ? (a/1000).toFixed(a>=10000?0:1)+'k' : a.toFixed(0); return (v<0?'-':'')+'$'+s; };
+  const getMode = () => (document.querySelector('input[name="mode"]:checked')||{}).value || 'auto';
+
+  /* ---------- state ---------- */
+  function readState(){ const o = {}; IDS.forEach(id => o[id] = $(id).value); o.mode = getMode(); return o; }
+  function writeState(o){
+    IDS.forEach(id => { $(id).value = (o[id] != null) ? o[id] : (DEFAULTS[id] != null ? DEFAULTS[id] : ''); });
+    const m = o.mode || 'auto';
+    $('m_' + m).checked = true;
+    syncPresets();
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify({s:readState(), ex:isExample})); } catch(e){} }
+  function load(){
+    try { const t = localStorage.getItem(KEY); if (t){ const j = JSON.parse(t); if (j && j.s){ isExample = !!j.ex; return j.s; } } } catch(e){}
+    return null;
+  }
+  function syncPresets(){
+    const t = numOf('thr');
+    ['25','30','33'].forEach(v => { $('tp'+v).checked = (t === Number(v)); });
+  }
+
+  /* ---------- parameters ---------- */
+  function params(active){
+    const isIC = active === 'IC';
+    return {
+      nlv:numOf('nlv'), spot:numOf('spot'), lp:numOf('lp'), sp:numOf('sp'), sc:numOf('sc'), lc:numOf('lc'), credit:numOf('credit'),
+      dPut:numOf('dput'), dCall:numOf('dcall'), kstrike:numOf('kstrike'), debit:numOf('debit'), ovr:numOf('ovr'),
+      allocPct: isIC ? numOf('allocIC') : numOf('allocCal'),
+      gainPct: isIC ? numOf('gainIC') : numOf('gainCal'),
+      lossPct: isIC ? numOf('lossIC') : numOf('lossCal'),
+      fee:numOf('fee'), stratAlloc:numOf('stratAlloc'), movePct:numOf('moveRule')
+    };
+  }
+
+  /* ---------- verdict ---------- */
+  function renderGauges(env){
+    const host = $('gauges');
+    if (!env.signals.length){ host.innerHTML = '<p class="hint">輸入 Barometer 或 IV Percentile，就會顯示判定。</p>'; return; }
+    host.innerHTML = env.signals.map(s => {
+      const v = Math.max(0, Math.min(100, s.value));
+      const cls = s.high ? 'hi' : 'lo';
+      return '<div class="gauge"><div class="gl"><span>'+esc(s.label)+'</span><b>'+s.value.toFixed(1)+'%　'+(s.high?'高於':'低於')+'門檻</b></div>'+
+        '<div class="track" role="img" aria-label="'+esc(s.label)+' '+s.value.toFixed(1)+'%，門檻 '+env.thr+'%">'+
+        '<div class="fill '+cls+'" style="width:'+v+'%"></div>'+
+        '<div class="tick" style="left:'+Math.max(0,Math.min(100,env.thr))+'%"></div>'+
+        '<div class="tl" style="left:'+Math.max(6,Math.min(94,env.thr))+'%">門檻 '+env.thr+'%</div></div></div>';
+    }).join('');
+  }
+
+  function renderVerdict(env, mode){
+    const c = $('vcard');
+    if (!env.strategy){
+      c.className = 'vcard';
+      c.innerHTML = '<div class="vlabel">環境判定</div><div class="vname" style="color:var(--ink-3)">待輸入</div><p class="vwhy">填入 Volatility Barometer 或 IV Percentile，就會判定該用哪個策略。</p>';
+      return;
+    }
+    const isIC = env.strategy === 'IC';
+    const name = isIC ? 'Iron Condor' : 'Calendar';
+    const thr = env.thr;
+    let why;
+    if (env.quality === 'agree') why = '兩項指標都' + (isIC ? '高於' : '低於') + '第 ' + thr + ' 百分位。' + (isIC ? '屬於中高波動，賣出波動率的 Iron Condor 較合適。' : '屬於低波動，買入波動率的 Calendar 較合適。');
+    else if (env.quality === 'single') why = '你輸入的指標' + (isIC ? '高於' : '低於') + '第 ' + thr + ' 百分位。' + (isIC ? '屬於中高波動。' : '屬於低波動。');
+    else why = '兩項指標分歧。課程把 VTS Volatility Barometer 當作最佳篩選指標，所以這裡以它為準。';
+    let notes = '';
+    if (env.quality === 'split') notes += '<div class="vnote warn">訊號分歧：' + env.signals.map(s => esc(s.label)+(s.high?'偏高':'偏低')).join('、') + '。可以縮小部位或等待更明確的訊號。</div>';
+    if (env.near && env.quality !== 'split') notes += '<div class="vnote warn">至少一項指標離門檻不到 ±' + env.margin + ' 點，環境可能很快切換。</div>';
+    if (env.vix){
+      const v = env.vix;
+      notes += '<div class="vnote">VIX ' + v.value.toFixed(2) + (v.above==null ? '' : (v.above ? '，高於' : '，低於') + ' PDF 參考值 ' + v.ref) + '（參考用，不影響判定）</div>';
+    }
+    if (mode !== 'auto'){
+      const chosen = mode === 'ic' ? 'IC' : 'CAL';
+      if (chosen !== env.strategy) notes += '<div class="vnote bad">你選的是 ' + (mode==='ic'?'Iron Condor':'Calendar') + '，但環境判定為 ' + name + '。</div>';
+    }
+    c.className = 'vcard ' + (isIC ? 'ic' : 'cal');
+    c.innerHTML = '<div class="vlabel">環境判定</div><div class="vname">' + name + '</div><p class="vwhy">' + why + '</p>' + notes;
+  }
+
+  /* ---------- checks ---------- */
+  function buildChecks(active, p, r, env, mode){
+    const L = [];
+    const add = (s,t,d) => L.push({s,t,d:d||''});
+    const dte = numOf('dte'), dMin = numOf('dteMin') ?? 45, dMax = numOf('dteMax') ?? 75;
+    const ticker = ($('ticker').value||'').trim().toUpperCase();
+    const maxTrades = numOf('maxTrades') ?? 3;
+    const layers = numOf('layers') ?? 0;
+
+    if (env.strategy){
+      const want = env.strategy;
+      if (want === active) add('ok','策略符合目前的波動環境', (want==='IC'?'中高波動':'低波動')+'，與判定一致。');
+      else add('bad','策略與波動環境不一致','環境判定為 '+(want==='IC'?'Iron Condor':'Calendar')+'，你現在填的是 '+(active==='IC'?'Iron Condor':'Calendar')+'。');
+    } else add('info','尚未輸入波動指標','無法確認策略是否符合環境。');
+
+    if (r.ready){
+      if (r.contracts === 0) add('bad','口數為 0','即使只開 1 口，最大虧損 '+usd(r.maxLossPer)+' 也超過單筆上限 '+usd(r.allocDollar)+'。需要更小的翼寬、更多資金，或換成較便宜的組合。');
+      else if (r.maxLoss > r.allocDollar + 1e-6) add('bad','最大虧損超過單筆上限','自訂口數讓最大虧損達 '+usd(r.maxLoss)+'，上限是 '+usd(r.allocDollar)+'。');
+      else add('ok','最大虧損在單筆上限內', usd(r.maxLoss)+'，佔淨值 '+pct(r.util)+'；上限 '+usd(r.allocDollar)+'。');
+    }
+
+    if (layers + 1 > maxTrades) add('bad','超過最大同時筆數','已開 '+layers+' 層，再開這筆會變成 '+(layers+1)+' 層，上限是 '+maxTrades+'。');
+    else add('ok','層數在上限內','這筆是第 '+(layers+1)+' 層，上限 '+maxTrades+'。');
+
+    const ex = numOf('existpx');
+    if (ex != null && p.spot != null){
+      const mv = (p.spot - ex) / ex, need = (numOf('moveRule') ?? 4)/100;
+      if (Math.abs(mv) >= need) add('ok','符合加層的價格移動條件','現價較既有部位開倉價移動 '+spct(mv)+'。');
+      else add('warn','同標的同到期日尚未移動足夠','現價較既有部位開倉價只移動 '+spct(mv)+'，規則要求至少 '+(need*100)+'%。');
+    }
+
+    if (ticker){
+      if (LIQUID.indexOf(ticker) >= 0) add('ok','標的流動性','試算表註解列出的高流動性標的。');
+      else add('warn','標的不在註解列出的清單','先確認選擇權成交量與買賣價差，多腳組合特別需要流動性。');
+    }
+
+    const nlv = numOf('nlv');
+    if (nlv != null && nlv > 500000) add('info','帳戶超過 50 萬美元','註解建議參考大帳戶最佳化：拉寬履約價間距或改用指數，可降低口數與手續費。');
+
+    if (active === 'IC'){
+      if (dte != null){
+        if (dte >= dMin && dte <= dMax) add('ok','到期天數在範圍內', dte+' 天（目標 '+dMin+'–'+dMax+'，約 60 天最理想）。');
+        else add('warn','到期天數不在範圍', dte+' 天，目標是 '+dMin+'–'+dMax+' 天。');
+      }
+      const tgt = numOf('dTarget') ?? 0.15, tol = numOf('dTol') ?? 0.03;
+      [['短 Put', p.dPut], ['短 Call', p.dCall]].forEach(a => {
+        if (a[1] != null){
+          if (Math.abs(a[1]-tgt) <= tol) add('ok', a[0]+' Delta 接近目標', a[1].toFixed(2)+'（目標約 '+tgt+'）。');
+          else add('warn', a[0]+' Delta 偏離目標', a[1].toFixed(2)+'，目標約 '+tgt+'。註解的做法是先找 0.15 Delta，再往更價外移到成交量大的履約價。');
+        }
+      });
+      if (r.ready){
+        if (Math.abs(r.putW - r.callW) > 1e-9) add('warn','兩側翼寬不對稱','Put 側 '+r.putW+'、Call 側 '+r.callW+'。註解說明 Iron Condor 使用對稱結構；最大虧損以較寬的一側計算。');
+        else add('ok','兩側翼寬對稱','翼寬 '+r.width+'。');
+        if (p.spot != null && !(p.sp < p.spot && p.spot < p.sc)) add('warn','現價不在兩個短履約價之間','Iron Condor 的現價通常位於兩個短腳中間。');
+      }
+      add('info','PDF 提到：進入 30 天內平倉','試算表註解沒有這條，待驗證，所以不納入判斷。');
+    } else {
+      if (dte != null){
+        if (dte >= dMin && dte <= dMax) add('ok','短腳到期天數在範圍內', dte+' 天（目標 '+dMin+'–'+dMax+'）。');
+        else add('warn','短腳到期天數不在範圍', dte+' 天。註解寫 Calendar 的短腳同樣瞄準 '+dMin+'–'+dMax+' 天；兩份 PDF 寫 30–40 天，與註解不同。');
+      }
+      const far = numOf('dtefar');
+      if (far != null && dte != null){
+        const gap = far - dte;
+        if (gap >= 25 && gap <= 35) add('ok','長腳約比短腳晚一個月','相差 '+gap+' 天。');
+        else add('warn','長腳與短腳的間隔不是約一個月','相差 '+gap+' 天，註解說長腳是短腳再往後一個月。');
+      }
+      if (r.ready && p.spot != null){
+        const t = (numOf('atmTol') ?? 1)/100;
+        if (Math.abs(r.dist) <= t) add('ok','履約價接近平價','距離現價 '+spct(r.dist)+'。');
+        else add('warn','履約價離平價較遠','距離現價 '+spct(r.dist)+'。註解說兩腳履約價相同且接近平價。');
+      }
+      add('info','Calendar 只用 Put','買進較遠月 Put、賣出較近月 Put，同一履約價。');
+    }
+    return L;
+  }
+
+  /* ---------- calendar expiry chart (model) ---------- */
+  function chartCal(p, r){
+    const W = 640, H = 260, L = 58, R = 16, T = 34, B = 44, iw = W-L-R, ih = H-T-B;
+    const e = r.est, c = Math.max(r.contracts, 1);
+    const lo = Math.min(r.lowThr, p.kstrike, p.spot), hi = Math.max(r.highThr, p.kstrike, p.spot);
+    const pad = (hi-lo)*0.25, x0 = lo-pad, x1 = hi+pad;
+    const fn = S => e.fn(S)*100*c;
+    const N = 140; const pts = [];
+    let maxPL = -Infinity;
+    for (let i = 0; i <= N; i++){ const S = x0 + (x1-x0)*i/N; const v = fn(S); pts.push([S,v]); if (v > maxPL) maxPL = v; }
+    const ml = -r.maxLossPer*c;
+    const yTop = (maxPL > 0 ? maxPL : -ml*0.2)*1.18, yBot = ml*1.18;
+    const X = v => L + (v-x0)/(x1-x0)*iw;
+    const Y = v => T + (yTop-v)/(yTop-yBot)*ih;
+    const path = pts.map((a,i)=> (i?'L':'M')+X(a[0]).toFixed(1)+' '+Y(a[1]).toFixed(1)).join(' ');
+    const z = Y(0).toFixed(1);
+    const area = path+' L'+X(x1).toFixed(1)+' '+z+' L'+X(x0).toFixed(1)+' '+z+' Z';
+    let s = '<svg viewBox="0 0 '+W+' '+H+'" id="chartSvg" role="img" aria-label="Calendar 近月到期時的預估損益圖">';
+    s += '<defs><clipPath id="cpU"><rect x="'+L+'" y="'+T+'" width="'+iw+'" height="'+Math.max(0,Y(0)-T).toFixed(1)+'"/></clipPath>'+
+         '<clipPath id="cpD"><rect x="'+L+'" y="'+Y(0).toFixed(1)+'" width="'+iw+'" height="'+Math.max(0,T+ih-Y(0)).toFixed(1)+'"/></clipPath></defs>';
+    s += '<path d="'+area+'" fill="var(--good-soft)" clip-path="url(#cpU)"/><path d="'+area+'" fill="var(--bad-soft)" clip-path="url(#cpD)"/>';
+    [maxPL > 0 ? maxPL : null, 0, ml].forEach(v => {
+      if (v === null) return;
+      s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="'+(v===0?1.5:1)+'" '+(v===0?'':'stroke-dasharray="3 4"')+'/>';
+      s += '<text class="svgt" x="'+(L-8)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end">'+(v===0?'$0':compact(v))+'</text>';
+    });
+    [r.lowThr, r.highThr].forEach(v => {
+      s += '<line x1="'+X(v).toFixed(1)+'" x2="'+X(v).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 4"/>';
+    });
+    s += '<line x1="'+X(p.spot).toFixed(1)+'" x2="'+X(p.spot).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink)" stroke-width="1.5"/>';
+    s += '<path d="'+path+'" fill="none" stroke="var(--cal)" stroke-width="2.5" stroke-linejoin="round"/>';
+    s += '<circle cx="'+X(e.maxPrice).toFixed(1)+'" cy="'+Y(fn(e.maxPrice)).toFixed(1)+'" r="4" fill="var(--surface)" stroke="var(--cal)" stroke-width="2"/>';
+    s += '<text class="svgt k" x="'+X(p.kstrike).toFixed(1)+'" y="'+(T-18)+'" text-anchor="middle">履約價</text><text class="svgt" x="'+X(p.kstrike).toFixed(1)+'" y="'+(T-6)+'" text-anchor="middle">'+p.kstrike+'</text>';
+    const bt = H-26;
+    s += '<text class="svgt" x="'+X(r.lowThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">-4%</text><text class="svgt" x="'+X(r.lowThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.lowThr.toFixed(1)+'</text>';
+    s += '<text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+bt+'" text-anchor="middle">現價</text><text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+p.spot+'</text>';
+    s += '<text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">+4%</text><text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.highThr.toFixed(1)+'</text>';
+    s += '<line id="xh" x1="0" x2="0" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--cal)" stroke-width="1" style="display:none"/>';
+    s += '<rect id="hit" x="'+L+'" y="'+T+'" width="'+iw+'" height="'+ih+'" fill="transparent"/></svg>';
+    return {svg:s, hover:{x0,x1,L,iw,X,fn,note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
+  }
+
+  /* ---------- chart ---------- */
+  function chartSVG(active, p, r){
+    const W = 640, H = 260, L = 58, R = 16, T = 34, B = 44;
+    const iw = W-L-R, ih = H-T-B;
+    if (active === 'IC'){
+      const c = Math.max(r.contracts, 1);
+      const rr = Object.assign({}, r, {contracts:c});
+      const lo = Math.min(p.lp, r.lowThr), hi = Math.max(p.lc, r.highThr);
+      const pad = (hi-lo)*0.04, x0 = lo-pad, x1 = hi+pad;
+      const mp = p.credit*100*c, ml = -(r.width-p.credit)*100*c;
+      const yTop = mp*1.18, yBot = ml*1.18;
+      const X = v => L + (v-x0)/(x1-x0)*iw;
+      const Y = v => T + (yTop-v)/(yTop-yBot)*ih;
+      const pts = [x0, p.lp, p.sp, p.sc, p.lc, x1];
+      const path = pts.map((x,i)=> (i?'L':'M') + X(x).toFixed(1) + ' ' + Y(VTS.payoffIC(p, rr, x)).toFixed(1)).join(' ');
+      const z = Y(0).toFixed(1);
+      const area = path + ' L' + X(x1).toFixed(1) + ' ' + z + ' L' + X(x0).toFixed(1) + ' ' + z + ' Z';
+      let s = '<svg viewBox="0 0 '+W+' '+H+'" id="chartSvg" role="img" aria-label="Iron Condor 到期損益圖">';
+      s += '<defs><clipPath id="cpU"><rect x="'+L+'" y="'+T+'" width="'+iw+'" height="'+(Y(0)-T).toFixed(1)+'"/></clipPath>'+
+           '<clipPath id="cpD"><rect x="'+L+'" y="'+Y(0).toFixed(1)+'" width="'+iw+'" height="'+(T+ih-Y(0)).toFixed(1)+'"/></clipPath></defs>';
+      s += '<path d="'+area+'" fill="var(--good-soft)" clip-path="url(#cpU)"/><path d="'+area+'" fill="var(--bad-soft)" clip-path="url(#cpD)"/>';
+      [mp, 0, ml].forEach(v => {
+        s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="'+(v===0?1.5:1)+'" '+(v===0?'':'stroke-dasharray="3 4"')+'/>';
+        s += '<text class="svgt" x="'+(L-8)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end">'+(v===0?'$0':compact(v))+'</text>';
+      });
+      [r.lowThr, r.highThr].forEach(v => {
+        s += '<line x1="'+X(v).toFixed(1)+'" x2="'+X(v).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 4"/>';
+      });
+      s += '<line x1="'+X(p.spot).toFixed(1)+'" x2="'+X(p.spot).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink)" stroke-width="1.5"/>';
+      s += '<path d="'+path+'" fill="none" stroke="var(--ic)" stroke-width="2.5" stroke-linejoin="round"/>';
+      [['長P',p.lp],['短P',p.sp],['短C',p.sc],['長C',p.lc]].forEach(a => {
+        s += '<circle cx="'+X(a[1]).toFixed(1)+'" cy="'+Y(VTS.payoffIC(p, rr, a[1])).toFixed(1)+'" r="4" fill="var(--surface)" stroke="var(--ic)" stroke-width="2"/>';
+        s += '<text class="svgt k" x="'+X(a[1]).toFixed(1)+'" y="'+(T-18)+'" text-anchor="middle">'+a[0]+'</text><text class="svgt" x="'+X(a[1]).toFixed(1)+'" y="'+(T-6)+'" text-anchor="middle">'+a[1]+'</text>';
+      });
+      const bt = H-26;
+      s += '<text class="svgt" x="'+X(r.lowThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">-4%</text><text class="svgt" x="'+X(r.lowThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.lowThr.toFixed(1)+'</text>';
+      s += '<text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+bt+'" text-anchor="middle">現價</text><text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+p.spot+'</text>';
+      s += '<text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">+4%</text><text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.highThr.toFixed(1)+'</text>';
+      s += '<line id="xh" x1="0" x2="0" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ic)" stroke-width="1" style="display:none"/>';
+      s += '<rect id="hit" x="'+L+'" y="'+T+'" width="'+iw+'" height="'+ih+'" fill="transparent"/></svg>';
+      return {svg:s, hover:{x0,x1,L,iw,X,fn:v=>VTS.payoffIC(p, rr, v), note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
+    }
+    if (r.est) return chartCal(p, r);
+    /* Calendar: price ruler only (no IV available) */
+    const lo = Math.min(p.kstrike, r.lowThr), hi = Math.max(p.kstrike, r.highThr);
+    const pad = (hi-lo)*0.2, x0 = lo-pad, x1 = hi+pad;
+    const X = v => L + (v-x0)/(x1-x0)*iw;
+    const y = 62;
+    let s = '<svg viewBox="0 0 '+W+' 130" role="img" aria-label="Calendar 價位尺">';
+    s += '<rect x="'+X(r.lowThr).toFixed(1)+'" y="'+(y-26)+'" width="'+(X(r.highThr)-X(r.lowThr)).toFixed(1)+'" height="52" fill="var(--cal-soft)" rx="4"/>';
+    s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)" stroke-width="2"/>';
+    s += '<text class="svgt" x="'+((X(r.lowThr)+X(r.highThr))/2).toFixed(1)+'" y="'+(y-32)+'" text-anchor="middle">±4% 區間內，同到期日不加新層</text>';
+    [[r.lowThr,'-4%'],[r.highThr,'+4%']].forEach(a => {
+      s += '<line x1="'+X(a[0]).toFixed(1)+'" x2="'+X(a[0]).toFixed(1)+'" y1="'+(y-26)+'" y2="'+(y+26)+'" stroke="var(--ink-3)" stroke-dasharray="2 4"/>';
+      s += '<text class="svgt" x="'+X(a[0]).toFixed(1)+'" y="'+(y+44)+'" text-anchor="middle">'+a[1]+'</text><text class="svgt" x="'+X(a[0]).toFixed(1)+'" y="'+(y+56)+'" text-anchor="middle">'+a[0].toFixed(1)+'</text>';
+    });
+    s += '<line x1="'+X(p.spot).toFixed(1)+'" x2="'+X(p.spot).toFixed(1)+'" y1="'+(y-26)+'" y2="'+(y+26)+'" stroke="var(--ink)" stroke-width="2"/>';
+    s += '<text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+(y+44)+'" text-anchor="middle">現價</text><text class="svgt k" x="'+X(p.spot).toFixed(1)+'" y="'+(y+56)+'" text-anchor="middle">'+p.spot+'</text>';
+    s += '<circle cx="'+X(p.kstrike).toFixed(1)+'" cy="'+y+'" r="7" fill="var(--cal)"/>';
+    s += '<text class="svgt k" x="'+X(p.kstrike).toFixed(1)+'" y="'+(y-48)+'" text-anchor="middle">履約價 '+p.kstrike+'</text></svg>';
+    return {svg:s, hover:null};
+  }
+
+  /* ---------- results ---------- */
+  function renderResults(active, p, r, env, mode){
+    const host = $('results');
+    const tag = active === 'IC' ? '<span class="tag ic">Iron Condor</span>' : '<span class="tag cal">Calendar</span>';
+    if (!r.ready){
+      let h = '<h2>開倉計畫 '+tag+'</h2>';
+      if (r.errors && r.errors.length) h += '<div class="errs">'+r.errors.map(e=>'<span>'+esc(e)+'</span>').join('')+'</div>';
+      else {
+        const NAMES = {nlv:'總淨清算價值',spot:'現價',lp:'長 Put 履約價',sp:'短 Put 履約價',sc:'短 Call 履約價',lc:'長 Call 履約價',credit:'收取權利金',kstrike:'履約價',debit:'支付權利金'};
+        const miss = (r.missing || []).map(k => NAMES[k] || k);
+        h += '<p class="empty">' + (miss.length ? '還缺：' + esc(miss.join('、')) + '。填完後這裡會算出口數、止盈與止損價位。' : '填完左側的帳戶、標的與權利金，這裡就會算出口數、止盈與止損價位。') + '</p>';
+      }
+      h += kBlock();
+      host.innerHTML = h;
+      return;
+    }
+    const isIC = active === 'IC';
+    const gainLabel = isIC ? '止盈：買回價（每股）降到' : '止盈：價差價值升到';
+    const lossLabel = isIC ? '止損：買回價（每股）升到' : '止損：價差價值降到';
+    const gainRule = isIC ? '≤ ' : '≥ ', lossRule = isIC ? '≥ ' : '≤ ';
+    let h = '<h2>開倉計畫 '+tag+(isIC?'':'')+'</h2>';
+    h += '<div class="bigrow">'+
+      '<div class="stat main"><div class="k">'+(r.overridden?'自訂口數':'建議口數')+'</div><div class="v">'+r.contracts+'</div><div class="s">'+(r.overridden?'建議 '+r.recContracts+' 口':'無條件捨去')+'</div></div>'+
+      '<div class="stat"><div class="k">最大虧損</div><div class="v">'+usd(r.maxLoss)+'</div><div class="s">佔淨值 '+pct(r.util)+'；上限 '+usd(r.allocDollar)+'</div></div>'+
+      '<div class="stat"><div class="k">'+(isIC?'最大獲利':'每口成本')+'</div><div class="v">'+(isIC?usd(r.maxProfit):usd(r.maxLossPer))+'</div><div class="s">'+(isIC?'到期且在兩個短腳之間':'支付的權利金 × 100')+'</div></div></div>';
+
+    h += '<h3>止盈與止損價位</h3><div class="tblwrap"><table><thead><tr><th>出場</th><th class="r">價位（每股）</th><th class="r">損益</th><th class="r">扣手續費後</th></tr></thead><tbody>'+
+      '<tr><td><span class="lvl g"></span>'+gainLabel+'</td><td class="r"><span class="num" title="'+(r.gainPrem)+'">'+gainRule+prem(r.gainPrem)+'</span></td><td class="r"><span class="num pos">'+sgn(r.gainDollar)+'</span></td><td class="r"><span class="num pos">'+sgn(r.gainNet)+'</span></td></tr>'+
+      '<tr><td><span class="lvl l"></span>'+lossLabel+'</td><td class="r"><span class="num" title="'+(r.lossPrem)+'">'+lossRule+prem(r.lossPrem)+'</span></td><td class="r"><span class="num neg">'+sgn(r.lossDollar)+'</span></td><td class="r"><span class="num neg">'+sgn(r.lossNet)+'</span></td></tr>'+
+      '</tbody></table></div>';
+    h += '<p class="hint" style="margin-top:6px">'+(isIC
+      ? '開倉權利金 '+prem(p.credit)+'。以接近目標價的限價單平倉；止盈是賺到一半權利金，止損是虧掉一半權利金。'
+      : '開倉成本 '+prem(p.debit)+'。價差價值高於止盈價或低於止損價時平倉，且不持有跨越近月到期日。')+
+      ' 手續費以 '+r.contracts+' 口 × '+(isIC?4:2)+' 腿 × 開平倉 2 次估算。</p>';
+
+    h += '<h3>風險與報酬</h3><dl class="kv">'+
+      '<dt>手續費（開平倉合計）</dt><dd>'+usd(r.fees,2)+(r.feePct!=null?'（最大虧損的 '+pct(r.feePct)+'）':'')+'</dd>'+
+      '<dt>止盈對組合報酬</dt><dd>'+spct(r.gainPortPct)+'</dd>'+
+      '<dt>止損對組合報酬</dt><dd>'+spct(r.lossPortPct)+'</dd>'+
+      (r.gainStratPct!=null?'<dt>止盈／止損對策略配置報酬（'+numOf('stratAlloc')+'%）</dt><dd>'+spct(r.gainStratPct)+' ／ '+spct(r.lossStratPct)+'</dd>':'');
+    if (isIC){
+      h += '<dt>損益兩平價（到期）</dt><dd>'+r.bePut.toFixed(2)+' ／ '+r.beCall.toFixed(2)+'</dd>'+
+        '<dt>短腳距離現價</dt><dd>'+spct(r.distPut)+' ／ '+spct(r.distCall)+'</dd>'+
+        '<dt>獲利機率（試算表算法）</dt><dd>'+pct(r.popSimple,0)+'</dd>'+
+        (r.popDelta!=null?'<dt>獲利機率（1 − 兩側 Delta）</dt><dd>'+pct(r.popDelta,0)+'</dd>':'')+
+        '<dt>最大獲利／最大虧損</dt><dd>'+(r.rr!=null?r.rr.toFixed(2):'—')+'</dd>';
+    } else {
+      h += '<dt>履約價距離現價</dt><dd>'+spct(r.dist)+'</dd>';
+    }
+    h += '<dt>下一層須等價格</dt><dd>≤ '+r.lowThr.toFixed(2)+' 或 ≥ '+r.highThr.toFixed(2)+'</dd></dl>';
+    if (isIC) h += '<p class="hint" style="margin-top:6px">「試算表算法」是 (翼寬 − 權利金) ÷ 翼寬，只是簡化的估計，並非真正的機率。</p>';
+
+    if (!isIC){
+      const dteN = numOf('dte'), farN = numOf('dtefar');
+      const haveFar = (farN != null && dteN != null && farN > dteN);
+      const daysRem = haveFar ? farN - dteN : 30;
+      const ivIn = numOf('ivest'), vixV = numOf('vix');
+      const ivPct = (ivIn != null && ivIn > 0) ? ivIn : ((vixV != null && vixV > 0) ? vixV : null);
+      if (ivPct != null){
+        const rate = (numOf('rate') ?? 4)/100;
+        const base = VTS.calExpiry({K:p.kstrike, debit:p.debit, daysRem, iv:ivPct/100, rate});
+        const sens = [-5,0,5].map(d => { const iv = Math.max(1, ivPct+d); return {iv, max:VTS.calExpiry({K:p.kstrike, debit:p.debit, daysRem, iv:iv/100, rate}).maxPs}; });
+        r.est = Object.assign(base, {ivPct, fromVix:!(ivIn != null && ivIn > 0), daysRem, daysAssumed:!haveFar, rate, sens});
+      }
+      if (r.est){
+        const e = r.est, c = Math.max(r.contracts, 1), mp = e.maxPs*100*c;
+        h += '<h3>預估最大獲利（模型估計）</h3><dl class="kv">'+
+          '<dt>近月到期、價格在 '+e.maxPrice.toFixed(1)+' 附近</dt><dd>'+usd(mp)+(r.contracts===0?'（以 1 口計）':'')+'</dd>'+
+          '<dt>預估獲利／最大虧損</dt><dd>'+(r.maxLoss>0 || r.contracts===0 ? (mp/(r.maxLossPer*c)).toFixed(2) : '—')+'</dd>'+
+          '<dt>近月到期的損益兩平區間</dt><dd>'+(e.beLow!=null && e.beHigh!=null ? e.beLow.toFixed(1)+' ～ '+e.beHigh.toFixed(1)+'（'+spct(e.beLow/p.spot-1,1)+' ～ '+spct(e.beHigh/p.spot-1,1)+'）' : '無獲利區間')+'</dd>'+
+          '<dt>止盈目標占預估最大獲利</dt><dd>'+(mp>0 && r.contracts>0 ? pct(r.gainDollar/mp,0) : '—')+'</dd>'+
+          '<dt>IV '+e.sens[0].iv.toFixed(0)+'%／'+e.sens[1].iv.toFixed(0)+'%／'+e.sens[2].iv.toFixed(0)+'% 時的最大獲利</dt><dd>'+e.sens.map(x=>usd(x.max*100*c)).join(' ／ ')+'</dd></dl>'+
+          '<p class="hint" style="margin-top:6px">用 Black-Scholes 估計：假設近月到期時遠月 IV 維持 '+e.ivPct.toFixed(1)+'%'+(e.fromVix?'（取自 VIX，可在「長腳到期天數」下方填入遠月 IV）':'')+'、利率 '+(e.rate*100).toFixed(1)+'%、遠月在近月到期時還剩 '+e.daysRem+' 天'+(e.daysAssumed?'（未填長腳天數，以 30 天假設）':'')+'。實際會隨 IV 變化與買賣價差而不同，請只當作量級參考。這個數字不是試算表或課程的規則；策略本身在 +25% 時就會停利。</p>';
+      }
+    }
+    const ch = chartSVG(active, p, r);
+    h += '<h3>'+(isIC ? '到期損益' : (r.est ? '近月到期時的預估損益（模型）' : '價位尺'))+'</h3><div class="chartbox">'+ch.svg+'</div>';
+    h += (isIC || r.est) ? '<div class="readout" id="readout">移動滑鼠或手指，查看各價位的到期損益'+ (ch.hover && ch.hover.note || '') +'。</div>'
+              : '<p class="hint">Calendar 的損益取決於時間與波動率。填入 VIX 或遠月 IV，就能顯示預估損益曲線。</p>';
+    h += kBlock();
+
+    const checks = buildChecks(active, p, r, env, mode);
+    const sym = {ok:'✓',warn:'!',bad:'×',info:'i'};
+    h += '<h3>規則檢查</h3><ul class="checks">'+checks.map(c =>
+      '<li><span class="ci '+c.s+'" aria-label="'+({ok:'符合',warn:'注意',bad:'不符',info:'提示'})[c.s]+'">'+sym[c.s]+'</span><span>'+esc(c.t)+(c.d?'<span class="d">'+esc(c.d)+'</span>':'')+'</span></li>').join('')+'</ul>';
+
+    h += '<h3>交易計畫</h3><textarea class="plan" id="plan" readonly aria-label="交易計畫文字"></textarea>'+
+      '<div class="btn-row" style="margin-top:8px"><button class="btn primary" id="btnCopy" type="button">複製交易計畫</button><span class="hint" id="copyMsg" style="align-self:center"></span></div>';
+    host.innerHTML = h;
+    $('plan').value = planText(active, p, r);
+    $('btnCopy').addEventListener('click', copyPlan);
+    if (ch.hover) wireHover(ch.hover);
+  }
+
+  function wireHover(hv){
+    const svg = $('chartSvg'), hit = $('hit'), xh = $('xh'), ro = $('readout');
+    if (!svg || !hit) return;
+    const move = ev => {
+      const pt = svg.createSVGPoint(); const e = ev.touches ? ev.touches[0] : ev;
+      pt.x = e.clientX; pt.y = e.clientY;
+      const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const x = Math.max(hv.L, Math.min(hv.L+hv.iw, loc.x));
+      const price = hv.x0 + (x-hv.L)/hv.iw*(hv.x1-hv.x0);
+      const pl = hv.fn(price);
+      xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.style.display = '';
+      ro.innerHTML = '價格 <b>'+price.toFixed(2)+'</b>　到期損益 <b class="'+(pl>=0?'pos':'neg')+'">'+sgn(Math.round(pl))+'</b>';
+    };
+    hit.addEventListener('pointermove', move);
+    hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', () => { xh.style.display = 'none'; });
+  }
+
+  function planText(active, p, r){
+    const t = ($('ticker').value||'').trim().toUpperCase() || '—';
+    const dte = numOf('dte');
+    const L = [];
+    if (active === 'IC'){
+      L.push('Iron Condor　'+t+'　現價 '+p.spot);
+      L.push('到期天數 '+(dte!=null?dte:'—')+'　口數 '+r.contracts+'（建議 '+r.recContracts+'）');
+      L.push('長 Put '+p.lp+' ／ 短 Put '+p.sp+' ／ 短 Call '+p.sc+' ／ 長 Call '+p.lc);
+      L.push('收取權利金 '+prem(p.credit)+'　最大虧損 '+usd(r.maxLoss)+'（'+pct(r.util)+' 淨值）');
+      L.push('止盈：買回價 ≤ '+prem(r.gainPrem)+'（'+sgn(r.gainDollar)+'）');
+      L.push('止損：買回價 ≥ '+prem(r.lossPrem)+'（'+sgn(r.lossDollar)+'）');
+      L.push('損益兩平 '+r.bePut.toFixed(2)+' ／ '+r.beCall.toFixed(2));
+    } else {
+      L.push('Calendar（Put）　'+t+'　現價 '+p.spot);
+      L.push('短腳到期天數 '+(dte!=null?dte:'—')+'　口數 '+r.contracts+'（建議 '+r.recContracts+'）');
+      L.push('履約價 '+p.kstrike+'　支付權利金 '+prem(p.debit));
+      L.push('最大虧損 '+usd(r.maxLoss)+'（'+pct(r.util)+' 淨值）');
+      L.push('止盈：價差價值 ≥ '+prem(r.gainPrem)+'（'+sgn(r.gainDollar)+'）');
+      L.push('止損：價差價值 ≤ '+prem(r.lossPrem)+'（'+sgn(r.lossDollar)+'）');
+    }
+    if (r.est) L.push('預估最大獲利（模型，IV '+r.est.ivPct.toFixed(1)+'%）約 '+usd(r.est.maxPs*100*Math.max(r.contracts,1)));
+    L.push('下一層須等價格 ≤ '+r.lowThr.toFixed(2)+' 或 ≥ '+r.highThr.toFixed(2));
+    L.push('手續費估算 '+usd(r.fees,2));
+    return L.join('\n');
+  }
+
+  function copyPlan(){
+    const ta = $('plan'), msg = $('copyMsg');
+    const done = ok => { msg.textContent = ok ? '已複製' : '請手動選取文字複製'; setTimeout(()=>{ if (msg) msg.textContent=''; }, 2500); };
+    const fallback = () => { try { ta.focus(); ta.select(); done(document.execCommand('copy')); } catch(e){ done(false); } };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(()=>done(true), fallback);
+      else fallback();
+    } catch(e){ fallback(); }
+  }
+
+  /* ---------- daily candles + key levels ---------- */
+  const KKEY = 'vts-calc-ohlc-v1';
+  let KROWS = null, lastCtx = null, KN = 120, KINFO = '', liveTimer = null;
+  function kBlock(){
+    return '<h3>標的日 K 線與關鍵價位</h3><div class="klbar"><label for="klN" class="hint">顯示最近</label>'+
+      '<select id="klN"><option value="60">60 根</option><option value="120">120 根</option><option value="250">250 根</option></select>'+
+      '<span class="hint" id="klSrc"></span></div>'+
+      '<div class="readout" id="klReadout">移動滑鼠或手指，查看各根 K 線，或右側區間內各價位的到期損益。</div>'+
+      '<div id="klChart"></div><div class="kllegend" id="klLegend"></div>';
+  }
+  const addDays = (ds, n) => { const d = new Date(ds + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0,10); };
+  const md = ds => (+ds.slice(5,7)) + '/' + (+ds.slice(8,10));
+  function niceTicks(a, b, n){
+    const raw = (b-a)/n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw/mag;
+    const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag, vals = [];
+    for (let v = Math.ceil(a/step)*step; v <= b + 1e-9; v += step) vals.push(+v.toFixed(8));
+    return {vals, dec: Math.max(0, -Math.floor(Math.log10(step) + 1e-9))};
+  }
+  function setStat(msg, cls){ const e = $('klStat'); e.textContent = msg || ''; e.className = 'klstat' + (cls ? ' ' + cls : ''); }
+  function saveK(){ try { if (KROWS) localStorage.setItem(KKEY, JSON.stringify(KROWS.slice(-400).map(b => [b.d,b.o,b.h,b.l,b.c]))); else localStorage.removeItem(KKEY); } catch(e){} }
+  function loadK(){ try { const t = localStorage.getItem(KKEY); if (!t) return null; const a = JSON.parse(t);
+      if (Array.isArray(a) && a.length >= 5) return a.map(x => ({d:x[0], o:x[1], h:x[2], l:x[3], c:x[4]}));
+    } catch(e){} return null; }
+  function describeK(extra){
+    if (!KROWS){ setStat(''); $('klSpot').disabled = true; return; }
+    const a = KROWS[0].d, b = KROWS[KROWS.length-1].d;
+    const age = Math.round((Date.now() - Date.parse(b + 'T00:00:00Z'))/86400000);
+    let msg = '已載入 ' + KROWS.length + ' 根日 K（' + a + ' ～ ' + b + '），最後收盤 ' + KROWS[KROWS.length-1].c + (extra || '') + '。';
+    let cls = '';
+    if (age > 7){ msg += ' 最後一根距今 ' + age + ' 天，到期區間是從最後一根 K 線往後推算，可能和實際日期有落差。'; cls = 'warn'; }
+    setStat(msg, cls); $('klSpot').disabled = false;
+  }
+  function ingest(text){
+    const res = VTS.parseOHLC(text);
+    if (res.error){ setStat(res.error, 'bad'); return; }
+    KROWS = res.rows; KINFO = '資料來源：貼上或上傳的 CSV'; saveK(); describeK(res.skipped ? '，略過 ' + res.skipped + ' 列無法辨識的資料' : '');
+    $('klData').open = false; renderK();
+  }
+
+  function renderK(){
+    const host = $('klChart'), ro = $('klReadout'), lg = $('klLegend');
+    if (!lastCtx || !host) return;
+    const sel = $('klN'); sel.value = String(KN); sel.onchange = () => { KN = parseInt(sel.value, 10) || 120; renderK(); };
+    $('klSrc').textContent = KINFO;
+    if (!KROWS){ host.innerHTML = '<p class="empty">貼上日 K 資料後，這裡會畫出 K 線，並疊上這筆交易的關鍵價位。</p>'; lg.innerHTML = ''; return; }
+    const {active, p, r} = lastCtx;
+    const lv = VTS.keyLevels(active, p, r);
+    const nSel = KN;
+    const bars = KROWS.slice(-nSel), nB = bars.length, last = bars[nB-1];
+    const dte = numOf('dte'), dteFar = numOf('dtefar');
+    const projTrue = (dte != null && dte > 0) ? Math.round(dte*5/7) : 0;
+    const proj = projTrue > 0 ? Math.max(projTrue, 8, Math.round(nB*0.2)) : 0, stretched = proj > projTrue + 1;
+    const W = Math.max(300, Math.floor(host.clientWidth || 720)), small = W < 560, H = small ? 380 : 460;
+    const Lm = 46, Rm = small ? 96 : 134, Tm = 28, Bm = 30, iw = W-Lm-Rm, ih = H-Tm-Bm;
+    const slots = nB + proj, sw = iw/slots, bx0 = Lm + nB*sw, bx1 = Lm + iw;
+    let lo = Infinity, hi = -Infinity;
+    bars.forEach(b => { lo = Math.min(lo, b.l); hi = Math.max(hi, b.h); });
+    const near = v => isFinite(v) && v > last.c*0.7 && v < last.c*1.3;
+    const lvItems = lv ? lv.items.filter(i => near(i.price)) : [];
+    lvItems.forEach(i => { lo = Math.min(lo, i.price); hi = Math.max(hi, i.price); });
+    if (near(p.spot)){ lo = Math.min(lo, p.spot); hi = Math.max(hi, p.spot); }
+    const padv = (hi-lo)*0.05, yMin = lo - padv, yMax = hi + padv;
+    const Y = v => Tm + (yMax-v)/(yMax-yMin)*ih;
+    const col = {maxprofit:'var(--good)', be:'var(--ink)', maxloss:'var(--bad)'};
+    const tk = niceTicks(yMin, yMax, small ? 5 : 7);
+    let s = '<svg viewBox="0 0 '+W+' '+H+'" id="klSvg" role="img" aria-label="標的日K線與策略關鍵價位">';
+    tk.vals.forEach(v => { s += '<line x1="'+Lm+'" x2="'+(Lm+iw)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--line-2)" stroke-width="1"/>'+
+      '<text class="svgt" x="'+(Lm-6)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end">'+v.toFixed(tk.dec)+'</text>'; });
+    /* expiry band */
+    if (proj > 0){
+      if (lv && lv.zones.length){
+        const fills = {maxprofit:['var(--good)',0.30], profit:['var(--good)',0.13], loss:['var(--bad)',0.13], maxloss:['var(--bad)',0.30]};
+        lv.zones.forEach(z => { const a = Math.max(z.lo, yMin), b = Math.min(z.hi, yMax); if (b <= a) return;
+          s += '<rect x="'+bx0.toFixed(1)+'" y="'+Y(b).toFixed(1)+'" width="'+(bx1-bx0).toFixed(1)+'" height="'+(Y(a)-Y(b)).toFixed(1)+'" fill="'+fills[z.kind][0]+'" fill-opacity="'+fills[z.kind][1]+'"/>'; });
+      } else s += '<rect x="'+bx0.toFixed(1)+'" y="'+Tm+'" width="'+(bx1-bx0).toFixed(1)+'" height="'+ih+'" fill="var(--surface-2)"/>';
+      s += '<line x1="'+bx0.toFixed(1)+'" x2="'+bx0.toFixed(1)+'" y1="'+Tm+'" y2="'+(Tm+ih)+'" stroke="var(--ink-3)" stroke-dasharray="3 4"/>';
+      s += '<line x1="'+bx1.toFixed(1)+'" x2="'+bx1.toFixed(1)+'" y1="'+Tm+'" y2="'+(Tm+ih)+'" stroke="var(--ink-3)" stroke-width="1.5"/>';
+      s += '<text class="svgt k" x="'+((bx0+bx1)/2).toFixed(1)+'" y="'+(Tm-10)+'" text-anchor="middle">'+(small ? '到期區間 '+dte+' 天' : '短腳到期區間・'+dte+' 天')+'</text>';
+      if (lv && lv.fn){
+        const N = 90; let mn = Infinity, mx = -Infinity; const pts = [];
+        for (let i = 0; i <= N; i++){ const S = yMin + (yMax-yMin)*i/N, v = lv.fn(S); pts.push([S,v]); mn = Math.min(mn, v); mx = Math.max(mx, v); }
+        if (mx > mn){
+          const pad = 6, X = v => bx0 + pad + (v-mn)/(mx-mn)*(bx1-bx0-2*pad);
+          if (mn < 0 && mx > 0) s += '<line x1="'+X(0).toFixed(1)+'" x2="'+X(0).toFixed(1)+'" y1="'+Tm+'" y2="'+(Tm+ih)+'" stroke="var(--ink-3)" stroke-dasharray="2 3"/>';
+          s += '<path d="'+pts.map((a,i) => (i?'L':'M')+X(a[1]).toFixed(1)+' '+Y(a[0]).toFixed(1)).join(' ')+'" fill="none" stroke="var(--'+(active==='IC'?'ic':'cal')+')" stroke-width="2.2" stroke-linejoin="round"/>';
+        }
+      }
+    }
+    /* candles */
+    const bw = Math.max(1.4, Math.min(10, sw*0.66));
+    bars.forEach((b, i) => { const x = Lm + (i+0.5)*sw, c = b.c >= b.o ? 'var(--good)' : 'var(--bad)';
+      s += '<line x1="'+x.toFixed(1)+'" x2="'+x.toFixed(1)+'" y1="'+Y(b.h).toFixed(1)+'" y2="'+Y(b.l).toFixed(1)+'" stroke="'+c+'" stroke-width="1"/>'+
+        '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+Y(Math.max(b.o,b.c)).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1, Math.abs(Y(b.o)-Y(b.c))).toFixed(1)+'" fill="'+c+'"/>'; });
+    /* level lines + de-overlapped labels */
+    const labs = lvItems.map(i => ({y:Y(i.price), price:i.price, kind:i.kind, text:i.label+' '+i.sign+i.price.toFixed(2).replace(/\.00$/,'')}));
+    if (near(p.spot)) labs.push({y:Y(p.spot), price:p.spot, kind:'spot', text:'現價 '+p.spot});
+    labs.sort((a,b) => a.y - b.y);
+    labs.forEach((l, i) => { l.ly = (i && l.y < labs[i-1].ly + 13) ? labs[i-1].ly + 13 : l.y; });
+    labs.forEach(l => {
+      const c = l.kind === 'spot' ? 'var(--ink)' : col[l.kind];
+      s += '<line x1="'+Lm+'" x2="'+bx1.toFixed(1)+'" y1="'+l.y.toFixed(1)+'" y2="'+l.y.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(l.kind==='spot'?1:1.2)+'" stroke-dasharray="'+(l.kind==='spot'?'1 3':'5 4')+'" opacity="'+(l.kind==='spot'?0.8:0.9)+'"/>'+
+        '<text class="svgt" x="'+(bx1+6)+'" y="'+(l.ly+4).toFixed(1)+'" style="fill:'+c+'" font-weight="'+(l.kind==='spot'?700:600)+'">'+esc(l.text)+'</text>';
+    });
+    /* time axis */
+    const nt = small ? 3 : 5;
+    for (let k = 0; k < nt; k++){ const i = Math.round((nB-1)*k/(nt-1)), x = Lm + (i+0.5)*sw;
+      if (proj > 0 && bx1 - x < 78) continue;
+      s += '<text class="svgt" x="'+x.toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle">'+md(bars[i].d)+'</text>'; }
+    const expDate = proj > 0 ? addDays(last.d, dte) : null;
+    if (proj > 0) s += '<text class="svgt k" x="'+bx1.toFixed(1)+'" y="'+(H-10)+'" text-anchor="end">'+md(expDate)+' 到期</text>';
+    s += '<line id="klx" y1="'+Tm+'" y2="'+(Tm+ih)+'" stroke="var(--ink-3)" style="display:none"/><line id="kly" x1="'+Lm+'" x2="'+(Lm+iw)+'" stroke="var(--ink-3)" style="display:none"/>';
+    s += '<rect id="klHit" x="'+Lm+'" y="'+Tm+'" width="'+iw+'" height="'+ih+'" fill="transparent"/></svg>';
+    host.innerHTML = s;
+
+    /* hover */
+    const svg = $('klSvg'), hit = $('klHit'), xl = $('klx'), yl = $('kly');
+    const move = ev => {
+      const e = ev.touches ? ev.touches[0] : ev, pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const x = Math.max(Lm, Math.min(Lm+iw, loc.x)), y = Math.max(Tm, Math.min(Tm+ih, loc.y)), i = Math.floor((x-Lm)/sw);
+      if (i < nB){ const b = bars[i]; xl.setAttribute('x1', x); xl.setAttribute('x2', x); xl.style.display = ''; yl.style.display = 'none';
+        ro.innerHTML = b.d + '　開 <b>'+b.o+'</b>　高 <b>'+b.h+'</b>　低 <b>'+b.l+'</b>　收 <b class="'+(b.c>=b.o?'pos':'neg')+'">'+b.c+'</b>';
+      } else { const price = yMax - (y-Tm)/ih*(yMax-yMin); yl.setAttribute('y1', y); yl.setAttribute('y2', y); yl.style.display = ''; xl.style.display = 'none';
+        ro.innerHTML = '到期時價格 <b>'+price.toFixed(2)+'</b>' + (lv && lv.fn ? '　預估損益 <b class="'+(lv.fn(price)>=0?'pos':'neg')+'">'+sgn(Math.round(lv.fn(price)))+'</b>' : ''); }
+    };
+    hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', () => { xl.style.display = 'none'; yl.style.display = 'none'; });
+
+    /* legend */
+    const sw1 = (c, o) => '<span class="sw" style="background:'+c+';opacity:'+o+'"></span>';
+    let L = '';
+    if (!r.ready) L += '<div>交易內容還沒填完整，所以只畫 K 線；填好履約價與權利金後會出現關鍵價位。</div>';
+    else if (lv && lv.noModel) L += '<div>Calendar 的損益曲線需要 IV：在「交易內容」填入遠月 IV 或 VIX，就會標出損益兩平與最大獲利價位。目前只標出履約價（最大獲利大約在這裡）。</div>';
+    else if (lv){
+      L += '<div>'+sw1('var(--good)',0.30)+'最大獲利區　'+sw1('var(--good)',0.13)+'獲利區　'+sw1('var(--bad)',0.13)+'虧損區　'+sw1('var(--bad)',0.30)+(active==='IC'?'最大虧損區（長腳之外）':'近最大虧損區（虧損達權利金 90% 以上）')+'</div>';
+      L += '<div>右側色帶是從最後一根 K 線到短腳到期日的區間，帶內的曲線是到期損益（往右越賺，虛線為損益 0）。'+(active==='IC' ? 'Iron Condor 兩個短腳履約價之間，到期時能賺滿權利金。' : '這是用 Black-Scholes 估計近月到期時的損益（遠月 IV '+(r.est?r.est.ivPct.toFixed(1):'')+'%），不是課程或試算表的數字。')+'</div>';
+      if (lvItems.length < lv.items.length) L += '<div class="klstat warn">有 '+(lv.items.length-lvItems.length)+' 條關鍵價位離 K 線價格太遠，沒有畫出。請確認 K 線資料和上方標的是否一致。</div>';
+    }
+    if (stretched) L += '<div class="hint">為了看得清楚，右側色帶的寬度有放大，不是等比例的時間長度。</div>';
+    if (proj > 0){ L += '<div>短腳到期日約 '+expDate+'（最後一根 K 線 '+last.d+' 加 '+dte+' 天）'+(active==='CAL' && dteFar != null && dteFar > dte ? '；長腳約 '+addDays(last.d, dteFar)+'，在圖右側之外。' : '。')+'</div>'; }
+    else L += '<div>在左側填入「到期天數（短腳）」，就會畫出到期區間。</div>';
+    lg.innerHTML = L;
+  }
+  $('klLoad').addEventListener('click', () => ingest($('klText').value));
+  $('klFile').addEventListener('change', ev => { const f = ev.target.files && ev.target.files[0]; if (!f) return;
+    const fr = new FileReader(); fr.onload = () => { $('klText').value = String(fr.result).slice(0, 2000000); ingest($('klText').value); }; fr.readAsText(f); ev.target.value = ''; });
+  $('klClear').addEventListener('click', () => { KROWS = null; KINFO = ''; $('klText').value = ''; saveK(); describeK(); $('klData').open = true; renderK(); });
+  $('klSpot').addEventListener('click', () => { if (!KROWS) return; $('spot').value = String(KROWS[KROWS.length-1].c); onUserEdit(); });
+  let rzT = null; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(renderK, 120); });
+  const PKEY = 'vts-calc-prov-v1', TKEY = 'vts-calc-tdkey-v1';
+  const hh = n => String(n).padStart(2,'0');
+  const stamp = () => { const t = new Date(); return hh(t.getHours()) + ':' + hh(t.getMinutes()) + ':' + hh(t.getSeconds()); };
+  let KSYM = null;
+  const provider = () => $('klProv').value;
+  const refreshMs = () => provider() === 'twelve' ? 120000 : 60000;
+  function syncProv(){
+    const tw = provider() === 'twelve';
+    $('klKeyWrap').hidden = !tw;
+    $('klAutoTxt').textContent = tw ? '每 2 分鐘自動更新' : '每 60 秒自動更新';
+    $('klProvNote').innerHTML = tw
+      ? '到 <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener">twelvedata.com</a> 免費註冊就能拿到金鑰；免費方案含美股即時資料，每天 800 次請求，所以自動更新設為每 2 分鐘一次（只抓最近幾根）。用「標的代號」欄位的代號，美股與 ETF 直接填 SPY、QQQ。免費方案不含台股。'
+      : 'Yahoo 的公開介面不需要金鑰，延遲約 15 分鐘，但它是非官方介面，常被瀏覽器的跨網站限制擋下。台股要加 .TW，例如 0050.TW。';
+  }
+  async function getJSON(url){
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+    try { const res = await fetch(url, {signal:ctl.signal, credentials:'omit'});
+      if (!res.ok){ let m = ''; try { const j = await res.json(); m = j && j.message || ''; } catch(e){} const err = new Error(m || ('HTTP ' + res.status)); err.http = res.status; throw err; }
+      return await res.json();
+    } finally { clearTimeout(to); }
+  }
+  async function loadTwelve(sym, incremental){
+    const key = ($('klKey').value || '').trim();
+    if (!key){ const e = new Error('先貼上 Twelve Data 的 API 金鑰。'); e.soft = true; throw e; }
+    try { localStorage.setItem(TKEY, key); } catch(e){}
+    const size = incremental ? 3 : 300;
+    const j = await getJSON('https://api.twelvedata.com/time_series?symbol=' + encodeURIComponent(sym) + '&interval=1day&outputsize=' + size + '&order=asc&apikey=' + encodeURIComponent(key));
+    const out = VTS.parseTwelve(j, incremental ? 1 : 5);
+    if (out.error){ const e = new Error(out.error); e.code = out.code; e.soft = true; throw e; }
+    let rows = out.rows;
+    if (incremental && KROWS){ const m = new Map(KROWS.map(b => [b.d, b])); rows.forEach(b => m.set(b.d, b)); rows = Array.from(m.values()).sort((a,b) => a.d < b.d ? -1 : 1); }
+    return {rows, label:'Twelve Data（美股即時）', symbol:(out.meta && out.meta.symbol) || sym};
+  }
+  async function loadYahoo(sym){
+    const j = await getJSON('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=2y&interval=1d&includePrePost=false');
+    const out = VTS.parseYahoo(j);
+    if (out.error){ const e = new Error(out.error); e.soft = true; throw e; }
+    return {rows:out.rows, label:'Yahoo Finance（約延遲 15 分鐘）', symbol:(out.meta && out.meta.symbol) || sym};
+  }
+  let liveBusy = false;
+  async function fetchLive(fromTimer){
+    const sym = ($('ticker').value || '').trim().toUpperCase();
+    if (!sym){ setStat('先在上方「標的代號」欄位填入代號，例如 SPY。', 'bad'); return; }
+    if (liveBusy) return; liveBusy = true;
+    const btn = $('klLive'); btn.disabled = true; btn.textContent = '抓取中…';
+    try {
+      const tw = provider() === 'twelve';
+      const incremental = tw && fromTimer === true && !!KROWS && KSYM === sym;
+      const out = tw ? await loadTwelve(sym, incremental) : await loadYahoo(sym);
+      KROWS = out.rows; KSYM = sym; saveK();
+      KINFO = '資料來源：' + out.label + '，更新於 ' + stamp();
+      describeK('，代號 ' + out.symbol); $('klData').open = false; renderK();
+    } catch(e){
+      let why = (e && e.name === 'AbortError') ? '逾時' : ((e && e.message) || '連線失敗');
+      if (e && (e.code === 401 || e.code === 403 || e.http === 401 || e.http === 403)) why += '（金鑰可能不對，或這個代號不在免費方案內）';
+      if (e && (e.code === 429 || e.http === 429)) why += '（超過免費額度，請稍後再試）';
+      const net = e && e.name === 'TypeError';
+      setStat(e && e.soft ? why : '抓不到行情（' + why + '）' + (net ? '。可能是瀏覽器或這個頁面的安全限制擋住了；' + (provider() === 'yahoo' ? '請改用 Twelve Data 或貼上 CSV。' : '請確認網路，或改貼 CSV。') : ''), 'bad');
+    } finally { liveBusy = false; btn.disabled = false; btn.textContent = '抓取即時行情'; }
+  }
+  $('klLive').addEventListener('click', () => fetchLive(false));
+  function setTimer(){
+    clearInterval(liveTimer); liveTimer = null;
+    if ($('klAuto').checked) liveTimer = setInterval(() => { if (!document.hidden) fetchLive(true); }, refreshMs());
+  }
+  $('klAuto').addEventListener('change', () => { setTimer(); if ($('klAuto').checked) fetchLive(false); });
+  $('klProv').addEventListener('change', () => { try { localStorage.setItem(PKEY, provider()); } catch(e){} syncProv(); setTimer(); });
+  try { const pv = localStorage.getItem(PKEY); if (pv === 'yahoo' || pv === 'twelve') $('klProv').value = pv; const k = localStorage.getItem(TKEY); if (k) $('klKey').value = k; } catch(e){}
+  syncProv();
+  KROWS = loadK(); if (KROWS){ KINFO = '資料來源：上次存檔的資料'; describeK(); $('klData').open = false; }
+
+  /* ---------- main update ---------- */
+  function update(){
+    const mode = getMode();
+    const env = VTS.envVerdict({baro:numOf('baro'), ivp:numOf('ivp'), vix:numOf('vix'), thr:numOf('thr'), margin:numOf('near'), vixRef:numOf('vixref')});
+    renderGauges(env);
+    renderVerdict(env, mode);
+    const active = mode === 'auto' ? (env.strategy || 'IC') : (mode === 'ic' ? 'IC' : 'CAL');
+    $('grpIC').hidden = active !== 'IC';
+    $('grpCal').hidden = active !== 'CAL';
+    $('modeHint').textContent = mode === 'auto'
+      ? (env.strategy ? '目前依環境判定使用 ' + (active==='IC'?'Iron Condor':'Calendar') + '。想自己選可切換上方按鈕。' : '尚未輸入波動指標，先以 Iron Condor 欄位顯示。')
+      : '你手動選了 ' + (active==='IC'?'Iron Condor':'Calendar') + '。';
+    const p = params(active);
+    const r = active === 'IC' ? VTS.sizeIC(p) : VTS.sizeCal(p);
+    renderResults(active, p, r, env, mode);
+    lastCtx = {active, p, r};
+    renderK();
+    $('exnote').hidden = !isExample;
+    syncPresets();
+  }
+
+  function onUserEdit(){ isExample = false; save(); update(); }
+
+  /* ---------- wiring ---------- */
+  IDS.forEach(id => $(id).addEventListener('input', onUserEdit));
+  document.querySelectorAll('input[name="mode"]').forEach(el => el.addEventListener('change', onUserEdit));
+  ['25','30','33'].forEach(v => $('tp'+v).addEventListener('change', () => { $('thr').value = v; onUserEdit(); }));
+  $('btnExIC').addEventListener('click', () => { writeState(EX_IC); isExample = true; save(); update(); });
+  $('btnExCal').addEventListener('click', () => { writeState(EX_CAL); isExample = true; save(); update(); });
+  $('btnClear').addEventListener('click', () => { writeState({mode:'auto'}); isExample = false; save(); update(); });
+
+  const saved = load();
+  if (saved){ writeState(saved); }
+  else { writeState(EX_IC); isExample = true; }
+  update();
+})();
+</script>
