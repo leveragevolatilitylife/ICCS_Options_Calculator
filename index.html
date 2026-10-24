@@ -1,176 +1,209 @@
-<title>VTS 開倉計算機</title>
+<title>Iron Condors / Calendar Spread 期權策略計算機</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: market verdict band on top, inputs left, live ticket right (sticky on desktop). */
+/* Style: leverage_volatility_life site (dark quant terminal, warm terracotta accent).
+   Layout: one wide column. Market verdict, account, trade, price data, then the ticket. */
 :root{
-  --bg:#edf0f3; --surface:#ffffff; --surface-2:#f5f7f9; --ink:#131c26; --ink-2:#4a5866; --ink-3:#6b7885;
-  --line:#d8dfe5; --line-2:#e8edf1;
-  --ic:#2c58c7; --ic-soft:#e3eafb; --cal:#9a3d7a; --cal-soft:#f6e5ef;
-  --good:#1f7a45; --good-soft:#e0f2e7; --warn:#8a5a00; --warn-soft:#fbefd2; --bad:#b3261e; --bad-soft:#fbe3e0;
-  --font-display:'Bricolage Grotesque','PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
-  --font-body:'IBM Plex Sans','PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
-  --font-num:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0d1319; --surface:#151d26; --surface-2:#1a242f; --ink:#e8edf2; --ink-2:#a9b6c2; --ink-3:#8493a0;
-    --line:#283644; --line-2:#202c38;
-    --ic:#7ea4ff; --ic-soft:#1a2a4d; --cal:#e48fc7; --cal-soft:#3a1f33;
-    --good:#62d092; --good-soft:#12301f; --warn:#e6b350; --warn-soft:#35280c; --bad:#ff9288; --bad-soft:#3a1815;
-    color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0d1319; --surface:#151d26; --surface-2:#1a242f; --ink:#e8edf2; --ink-2:#a9b6c2; --ink-3:#8493a0;
-  --line:#283644; --line-2:#202c38;
-  --ic:#7ea4ff; --ic-soft:#1a2a4d; --cal:#e48fc7; --cal-soft:#3a1f33;
-  --good:#62d092; --good-soft:#12301f; --warn:#e6b350; --warn-soft:#35280c; --bad:#ff9288; --bad-soft:#3a1815;
+  --bg:#0a0e14; --bg-panel:#10161d; --bg-panel-hover:#131b23;
+  --border:#202932; --border-soft:#171e26;
+  --text-primary:#e7edf3; --text-secondary:#8a97a6; --text-tertiary:#55626f;
+  --heading:#c9a688;
+  --accent:#c9805f; --accent-rgb:201,128,95;
+  --green:#34d399; --green-dim:#16352a;
+  --amber:#fbbf24; --amber-dim:#3a2f14;
+  --red:#f87171; --red-dim:#3a1c1c;
+  --steel:#8fb3d9; --steel-dim:#16222e;
+  /* names used by the calculator code and charts */
+  --surface:var(--bg-panel); --surface-2:#0c1219;
+  --ink:var(--text-primary); --ink-2:var(--text-secondary); --ink-3:#7a8896;
+  --line:var(--border); --line-2:var(--border-soft);
+  --ic:var(--accent); --ic-soft:rgba(var(--accent-rgb),.14);
+  --cal:var(--steel); --cal-soft:var(--steel-dim);
+  --good:var(--green); --good-soft:var(--green-dim);
+  --warn:var(--amber); --warn-soft:var(--amber-dim);
+  --bad:var(--red); --bad-soft:var(--red-dim);
+  --font-display:'Space Grotesk','Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+  --font-body:'Noto Sans TC','Space Grotesk','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+  --font-num:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
-.app{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.2}
+body{margin:0;background-color:var(--bg);
+  background-image:radial-gradient(900px 520px at 0% 0%,rgba(var(--accent-rgb),.07),transparent 65%),radial-gradient(800px 480px at 100% 0%,rgba(52,211,153,.04),transparent 65%);
+  background-repeat:no-repeat;color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.65;
+  padding-left:max(28px,env(safe-area-inset-left,0px));padding-right:max(28px,env(safe-area-inset-right,0px));padding-block:0 56px}
+.app{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.25}
 p{margin:0}
+a{color:var(--accent)}
 .num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
 button,input,select{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--ic);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 
-/* header */
-.top{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:flex-end}
-.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
-h1{font-size:clamp(26px,4vw,36px);margin-top:2px}
-.lede{color:var(--ink-2);max-width:60ch;margin-top:6px}
+/* site header */
+.site-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0 16px;border-bottom:1px solid var(--border-soft)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;font-family:var(--font-num);font-size:14px;font-weight:600;color:var(--text-primary);text-decoration:none;line-height:1.35}
+.avatar{flex:none;width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.25)}
+.head-right{display:flex;align-items:center;gap:16px;flex:none;font-family:var(--font-num);font-size:12px;color:var(--text-tertiary)}
+.social{display:flex;gap:12px}
+.social a{color:var(--text-secondary);text-decoration:none}
+.social a:hover,.crumb:hover{color:var(--accent)}
+.intro{padding:26px 0 4px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.crumb{font-family:var(--font-num);font-size:12px;color:var(--text-tertiary);text-decoration:none}
+.eyebrow{font-family:var(--font-num);font-size:13px;color:var(--accent);margin-top:6px}
+h1{font-family:'Noto Sans TC','Space Grotesk',system-ui,sans-serif;font-weight:900;color:var(--heading);font-size:clamp(26px,4.4vw,40px);line-height:1.2}
+.lede{color:var(--text-secondary);max-width:62ch;margin-top:2px}
+.intro .btn-row{margin-top:12px}
 .btn-row{display:flex;flex-wrap:wrap;gap:8px}
-.btn{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;min-height:36px}
-.btn:hover{border-color:var(--ink-3)}
-.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.exnote{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 12px}
+.btn{border:1px solid var(--border);background:var(--bg-panel);padding:7px 12px;border-radius:4px;cursor:pointer;font-family:var(--font-num);font-size:12.5px;font-weight:500;min-height:36px;color:var(--text-primary)}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#0a0e14;border-color:var(--accent);font-weight:600}
+.btn.primary:hover{background:#d68f6f;color:#0a0e14}
+.exnote{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:4px;padding:8px 12px}
 
 /* panels */
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
-.panel h2{font-size:17px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.panel h3{font-size:14px;color:var(--ink-2);margin:16px 0 8px;font-family:var(--font-body);font-weight:600}
-.hint{font-size:12.5px;color:var(--ink-3)}
-.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.field{display:flex;flex-direction:column;gap:4px;min-width:0}
-.field label{font-size:12.5px;font-weight:500;color:var(--ink-2)}
-.field input,.field select{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;font-family:var(--font-num);font-size:14.5px;min-height:38px}
-.field input:focus{border-color:var(--ic);background:var(--surface)}
+.panel{background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;padding:24px}
+.panel h2{font-size:18px;color:var(--heading);margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:700}
+.panel h3{font-size:12.5px;color:var(--text-secondary);margin:20px 0 10px;font-family:var(--font-num);font-weight:600;letter-spacing:.04em}
+.hint{font-size:12.5px;color:var(--ink-3);font-weight:400;font-family:var(--font-body)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-size:12.5px;font-weight:500;color:var(--text-secondary)}
+.field input,.field select{width:100%;min-width:0;border:1px solid var(--border);background:var(--surface-2);border-radius:4px;padding:8px 10px;font-family:var(--font-num);font-size:14px;min-height:40px;color:var(--text-primary)}
+.field input:focus,.field select:focus{border-color:var(--accent);outline:none;background:var(--bg)}
+.field input::placeholder{color:var(--text-tertiary)}
 .field .sub{font-size:11.5px;color:var(--ink-3)}
-.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:9px;padding:3px;background:var(--surface-2);gap:2px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:4px;padding:3px;background:var(--surface-2);gap:2px}
 .seg input{position:absolute;opacity:0;pointer-events:none}
-.seg label{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink-2)}
-.seg input:checked+label{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
-.seg input:focus-visible+label{outline:2px solid var(--ic)}
-details.adv{margin-top:14px;border-top:1px solid var(--line-2);padding-top:10px}
-details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:4px 0}
-details.adv .grid3{margin-top:10px}
+.seg label{padding:6px 12px;border-radius:3px;font-family:var(--font-num);font-size:12.5px;font-weight:500;cursor:pointer;color:var(--text-secondary)}
+.seg input:checked+label{background:rgba(var(--accent-rgb),.16);color:var(--accent);box-shadow:0 0 0 1px rgba(var(--accent-rgb),.55)}
+.seg input:focus-visible+label{outline:2px solid var(--accent)}
+details.adv{margin-top:16px;border-top:1px solid var(--border-soft);padding-top:12px}
+details.adv summary{cursor:pointer;font-family:var(--font-num);font-size:12.5px;font-weight:600;color:var(--text-secondary);padding:4px 0}
+details.adv summary:hover{color:var(--accent)}
+details.adv .grid3,details.adv .g4{margin-top:12px}
 
 /* verdict band */
-.verdict{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
-.vcard{border-radius:12px;padding:18px;border:1px solid var(--line);background:var(--surface-2)}
-.vcard.ic{background:var(--ic-soft);border-color:transparent}
-.vcard.cal{background:var(--cal-soft);border-color:transparent}
-.vlabel{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--ink-2)}
-.vname{font-family:var(--font-display);font-weight:700;font-size:clamp(32px,5vw,46px);line-height:1.05;margin:4px 0 6px}
-.vcard.ic .vname{color:var(--ic)} .vcard.cal .vname{color:var(--cal)}
-.vwhy{color:var(--ink);font-size:14px}
-.vnote{margin-top:10px;font-size:13px;padding:8px 10px;border-radius:8px;background:var(--surface);color:var(--ink-2)}
+.verdict{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:22px;align-items:start}
+.vcard{border-radius:6px;padding:20px;border:1px solid var(--border);background:var(--surface-2)}
+.vcard.ic{background:var(--ic-soft);border-color:rgba(var(--accent-rgb),.45)}
+.vcard.cal{background:var(--cal-soft);border-color:rgba(143,179,217,.4)}
+.vlabel{font-family:var(--font-num);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--text-secondary)}
+.vname{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,5vw,44px);line-height:1.08;margin:6px 0 8px}
+.vcard.ic .vname{color:var(--accent)} .vcard.cal .vname{color:var(--cal)}
+.vwhy{color:var(--text-primary);font-size:14px}
+.vnote{margin-top:12px;font-size:13px;padding:8px 10px;border-radius:4px;background:rgba(255,255,255,.04);color:var(--text-secondary)}
 .vnote.warn{background:var(--warn-soft);color:var(--warn)}
 .vnote.bad{background:var(--bad-soft);color:var(--bad)}
 .gauges{display:flex;flex-direction:column;gap:14px;margin-top:4px}
-.gauge .gl{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;gap:8px}
+.gauge .gl{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;gap:8px}
 .gauge .gl b{font-family:var(--font-num);font-weight:600}
-.track{position:relative;height:10px;border-radius:5px;background:var(--line-2)}
+.track{position:relative;height:10px;border-radius:5px;background:var(--border-soft);border:1px solid var(--border)}
 .track .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px 0 0 5px}
-.track .fill.hi{background:var(--ic)} .track .fill.lo{background:var(--cal)}
-.track .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
-.track .tl{position:absolute;top:16px;transform:translateX(-50%);font-size:11px;color:var(--ink-3);white-space:nowrap;font-family:var(--font-num)}
-.gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-top:20px;font-family:var(--font-num)}
-.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
-
-/* main two-column */
-.cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}
-.col{display:flex;flex-direction:column;gap:16px;min-width:0}
-.sticky{position:sticky;top:12px}
-.tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px}
-.tag.ic{background:var(--ic-soft);color:var(--ic)} .tag.cal{background:var(--cal-soft);color:var(--cal)}
+.track .fill.hi{background:var(--accent)} .track .fill.lo{background:var(--cal)}
+.track .tick{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--text-primary)}
+.track .tl{position:absolute;top:17px;transform:translateX(-50%);font-size:11px;color:var(--ink-3);white-space:nowrap;font-family:var(--font-num)}
+.gscale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-top:22px;font-family:var(--font-num)}
+.chip{display:inline-block;font-family:var(--font-num);font-size:11px;padding:2px 8px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-secondary)}
+.tag{font-family:var(--font-num);font-size:11px;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid transparent}
+.tag.ic{background:var(--ic-soft);color:var(--accent);border-color:rgba(var(--accent-rgb),.4)}
+.tag.cal{background:var(--cal-soft);color:var(--cal);border-color:rgba(143,179,217,.4)}
 
 /* results */
-.bigrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.stat{background:var(--surface-2);border-radius:10px;padding:12px}
-.stat .k{font-size:12px;color:var(--ink-2)}
-.stat .v{font-family:var(--font-num);font-size:clamp(20px,3vw,28px);font-weight:600;line-height:1.2;margin-top:2px}
-.stat .s{font-size:12px;color:var(--ink-3);margin-top:2px}
-.stat.main{background:var(--ink);color:var(--bg)} .stat.main .k,.stat.main .s{color:inherit;opacity:.78}
+.bigrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.stat{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:16px}
+.stat .k{font-family:var(--font-num);font-size:12px;color:var(--text-secondary)}
+.stat .v{font-family:var(--font-num);font-size:clamp(22px,3.2vw,30px);font-weight:600;line-height:1.2;margin-top:4px}
+.stat .s{font-size:12px;color:var(--ink-3);margin-top:3px}
+.stat.main{background:var(--ic-soft);border-color:rgba(var(--accent-rgb),.55)}
+.stat.main .v{color:var(--accent)}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 32px;align-items:start}
+.rgrid>div>h3:first-child{margin-top:20px}
 .tblwrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--line-2);vertical-align:top}
-th{font-size:12px;color:var(--ink-3);font-weight:600}
+th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--border-soft);vertical-align:top}
+th{font-family:var(--font-num);font-size:11.5px;color:var(--ink-3);font-weight:600}
 td.r,th.r{text-align:right}
 td .num{white-space:nowrap}
 .pos{color:var(--good)} .neg{color:var(--bad)}
 .lvl{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .lvl.g{background:var(--good)} .lvl.l{background:var(--bad)}
-.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
-.kv dt{color:var(--ink-2)} .kv dd{margin:0;text-align:right;font-family:var(--font-num)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:8px 14px;font-size:14px}
+.kv dt{color:var(--text-secondary)} .kv dd{margin:0;text-align:right;font-family:var(--font-num);font-size:13.5px}
 .chartbox{margin-top:6px}
 .chartbox svg{width:100%;height:auto;display:block;touch-action:pan-y}
-.readout{font-size:13px;color:var(--ink-2);min-height:22px;font-family:var(--font-num)}
+.readout{font-size:13px;color:var(--text-secondary);min-height:22px;font-family:var(--font-num)}
 .svgt{fill:var(--ink-3);font-size:11px;font-family:var(--font-num)}
+.svgt.k{fill:var(--text-primary)}
 [hidden]{display:none!important}
-.kltext{width:100%;min-height:96px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;font-family:var(--font-num);font-size:12.5px;color:var(--ink);resize:vertical}
-.klbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
-.klbar select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 8px;font-size:13px;min-height:36px;color:var(--ink)}
-.klstat{font-size:13px;margin-top:8px;color:var(--ink-2)} .klstat.bad{color:var(--bad)} .klstat.warn{color:var(--warn)}
-.kllegend{font-size:12.5px;color:var(--ink-2);margin-top:8px;line-height:1.7}
+.kltext{width:100%;min-height:96px;border:1px solid var(--border);background:var(--surface-2);border-radius:4px;padding:8px 10px;font-family:var(--font-num);font-size:12.5px;color:var(--text-primary);resize:vertical}
+.klbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 4px}
+.klbar select{border:1px solid var(--border);background:var(--surface-2);border-radius:4px;padding:6px 8px;font-family:var(--font-num);font-size:12.5px;min-height:36px;color:var(--text-primary)}
+.klstat{font-size:13px;margin-top:10px;color:var(--text-secondary)} .klstat.bad{color:var(--bad)} .klstat.warn{color:var(--warn)}
+.kllegend{font-size:12.5px;color:var(--text-secondary);margin-top:8px;line-height:1.75}
 .kllegend .sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin-right:4px}
 #klChart svg{width:100%;height:auto;display:block;touch-action:pan-y}
-.svgt.k{fill:var(--ink)}
-.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.checks li{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:14px}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.checks li{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:14px}
 .ci{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
 .ci.ok{background:var(--good-soft);color:var(--good)} .ci.warn{background:var(--warn-soft);color:var(--warn)}
-.ci.bad{background:var(--bad-soft);color:var(--bad)} .ci.info{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.ci.bad{background:var(--bad-soft);color:var(--bad)} .ci.info{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--border)}
 .checks .d{display:block;color:var(--ink-3);font-size:12.5px}
-.errs{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:2px}
+.errs{background:var(--bad-soft);color:var(--bad);border-radius:4px;padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:2px}
 .empty{color:var(--ink-3);padding:24px 8px;text-align:center}
-textarea.plan{width:100%;min-height:150px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:10px;font-family:var(--font-num);font-size:12.5px;line-height:1.55;resize:vertical}
-.foot{font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
-.foot b{color:var(--ink-2)}
+textarea.plan{width:100%;min-height:150px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);padding:12px;font-family:var(--font-num);font-size:12.5px;line-height:1.6;resize:vertical;color:var(--text-primary)}
+.foot{font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border-soft);padding-top:18px;margin-top:6px}
+.foot b{color:var(--text-secondary)}
+.foot .disc{font-family:var(--font-num);color:var(--text-tertiary)}
 @media (max-width:900px){
-  .verdict{grid-template-columns:1fr}
-  .cols{grid-template-columns:1fr}
-  .sticky{position:static}
+  .verdict,.rgrid{grid-template-columns:1fr}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@media (max-width:520px){
+@media (max-width:560px){
+  body{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .meta-date{display:none}
+  .site-head{flex-wrap:wrap;row-gap:8px}
+  .brand{flex:1 1 100%}
+  .panel{padding:16px}
   .grid3{grid-template-columns:repeat(2,minmax(0,1fr))}
   .bigrow{grid-template-columns:1fr 1fr}
   .bigrow .stat.main{grid-column:1/-1}
-  .panel{padding:14px}
 }
+@media (max-width:380px){ .social .handle{display:none} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 <div class="app">
-  <header class="top">
-    <div>
-      <p class="eyebrow">VTS Iron Condor ／ Calendar</p>
-      <h1>VTS 開倉計算機</h1>
-      <p class="lede">依課程試算表的規則，判斷現在該做 Iron Condor 還是 Calendar，並算出口數、止盈與止損價位。</p>
+  <header class="site-head">
+    <a class="brand" href="https://leveragevolatilitylife.github.io/">
+      <img class="avatar" src="https://leveragevolatilitylife.github.io/avatar.jpg" alt="" width="34" height="34" onerror="this.style.display='none'">
+      <span>Yung's Journey to FIRE｜Investing with Leverage &amp; Volatility</span>
+    </a>
+    <div class="head-right">
+      <span class="meta-date">OPTIONS · STRATEGY TOOL</span>
+      <span class="social">
+        <a href="https://www.instagram.com/leverage_volatility_life/" target="_blank" rel="noopener" aria-label="Instagram @leverage_volatility_life">IG <span class="handle">@leverage_volatility_life</span></a>
+        <a href="https://www.threads.net/@leverage_volatility_life" target="_blank" rel="noopener" aria-label="Threads @leverage_volatility_life">Threads</a>
+      </span>
     </div>
+  </header>
+  <section class="intro">
+    <a class="crumb" href="https://leveragevolatilitylife.github.io/">← 回到入口</a>
+    <p class="eyebrow">VTS IRON CONDOR / CALENDAR</p>
+    <h1>Iron Condors / Calendar Spread 期權策略計算機</h1>
+    <p class="lede">依課程試算表的規則，判斷現在該做 Iron Condor 還是 Calendar，並算出口數、止盈與止損價位。</p>
     <div class="btn-row">
       <button class="btn" id="btnExIC" type="button">載入範例：Iron Condor</button>
       <button class="btn" id="btnExCal" type="button">載入範例：Calendar</button>
       <button class="btn" id="btnClear" type="button">清空</button>
     </div>
-  </header>
+  </section>
   <div class="exnote" id="exnote" hidden>目前顯示的是課程試算表裡的範例交易，不是你的部位。修改任何欄位後這行提示會消失。</div>
 
   <!-- 1. market -->
@@ -203,89 +236,79 @@ textarea.plan{width:100%;min-height:150px;border:1px solid var(--line);border-ra
     </div>
   </section>
 
-  <div class="cols">
-    <!-- inputs -->
-    <div class="col">
-      <section class="panel">
-        <h2>2. 帳戶與標的</h2>
-        <div class="grid2">
-          <div class="field"><label for="nlv">總淨清算價值（美元）</label><input id="nlv" type="number" inputmode="decimal" step="any" min="0"></div>
-          <div class="field"><label for="ticker">標的代號</label><input id="ticker" type="text" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
-          <div class="field"><label for="spot">現價</label><input id="spot" type="number" inputmode="decimal" step="any" min="0"></div>
-          <div class="field"><label for="dte">到期天數（短腳）</label><input id="dte" type="number" inputmode="numeric" step="1" min="0"><span class="sub">含週末與假日的日曆天數</span></div>
-        </div>
-      </section>
+  <section class="panel">
+    <h2>2. 帳戶與標的</h2>
+    <div class="g4">
+      <div class="field"><label for="nlv">總淨清算價值（美元）</label><input id="nlv" type="number" inputmode="decimal" step="any" min="0"></div>
+      <div class="field"><label for="ticker">標的代號</label><input id="ticker" type="text" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
+      <div class="field"><label for="spot">現價</label><input id="spot" type="number" inputmode="decimal" step="any" min="0"></div>
+      <div class="field"><label for="dte">到期天數（短腳）</label><input id="dte" type="number" inputmode="numeric" step="1" min="0"><span class="sub">含週末與假日的日曆天數</span></div>
+    </div>
+  </section>
 
-      <section class="panel">
-        <h2>3. 交易內容
-          <span class="seg" id="modeSeg" style="margin-left:auto">
-            <input type="radio" name="mode" id="m_auto" value="auto"><label for="m_auto">依環境判定</label>
-            <input type="radio" name="mode" id="m_ic" value="ic"><label for="m_ic">Iron Condor</label>
-            <input type="radio" name="mode" id="m_cal" value="cal"><label for="m_cal">Calendar</label>
-          </span>
-        </h2>
-        <p class="hint" id="modeHint" style="margin:-4px 0 12px"></p>
+  <section class="panel">
+    <h2>3. 交易內容
+      <span class="seg" id="modeSeg" style="margin-left:auto">
+        <input type="radio" name="mode" id="m_auto" value="auto"><label for="m_auto">依環境判定</label>
+        <input type="radio" name="mode" id="m_ic" value="ic"><label for="m_ic">Iron Condor</label>
+        <input type="radio" name="mode" id="m_cal" value="cal"><label for="m_cal">Calendar</label>
+      </span>
+    </h2>
+    <p class="hint" id="modeHint" style="margin:-4px 0 12px"></p>
 
-        <div id="grpIC">
-          <div class="grid2">
-            <div class="field"><label for="lp">長 Put 履約價</label><input id="lp" type="number" inputmode="decimal" step="any"></div>
-            <div class="field"><label for="sp">短 Put 履約價</label><input id="sp" type="number" inputmode="decimal" step="any"></div>
-            <div class="field"><label for="sc">短 Call 履約價</label><input id="sc" type="number" inputmode="decimal" step="any"></div>
-            <div class="field"><label for="lc">長 Call 履約價</label><input id="lc" type="number" inputmode="decimal" step="any"></div>
-            <div class="field"><label for="credit">收取權利金（每股）</label><input id="credit" type="number" inputmode="decimal" step="any" min="0"></div>
-            <div class="field"><label for="dput">短 Put Delta（選填）</label><input id="dput" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
-            <div class="field"><label for="dcall">短 Call Delta（選填）</label><input id="dcall" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
-          </div>
-        </div>
-
-        <div id="grpCal">
-          <div class="grid2">
-            <div class="field"><label for="kstrike">履約價（Put，長短腳相同）</label><input id="kstrike" type="number" inputmode="decimal" step="any"></div>
-            <div class="field"><label for="debit">支付權利金（每股）</label><input id="debit" type="number" inputmode="decimal" step="any" min="0"></div>
-            <div class="field"><label for="dtefar">長腳到期天數（選填）</label><input id="dtefar" type="number" inputmode="numeric" step="1" min="0"><span class="sub">應比短腳多約一個月</span></div>
-            <div class="field"><label for="ivest">遠月隱含波動率 IV（%，選填）</label><input id="ivest" type="number" inputmode="decimal" step="any" min="0"><span class="sub">用來估計最大獲利；空白時用 VIX</span></div>
-          </div>
-        </div>
-
-        <h3>部位與分層</h3>
-        <div class="grid3">
-          <div class="field"><label for="layers">目前已開的層數</label><input id="layers" type="number" inputmode="numeric" step="1" min="0"></div>
-          <div class="field"><label for="existpx">同標的同到期日既有部位的開倉價</label><input id="existpx" type="number" inputmode="decimal" step="any" min="0"><span class="sub">選填，用來檢查 4% 規則</span></div>
-          <div class="field"><label for="ovr">自訂口數（選填）</label><input id="ovr" type="number" inputmode="numeric" step="1" min="0"><span class="sub">留空則用建議口數</span></div>
-        </div>
-
-        <details class="adv">
-          <summary>進階設定（預設值來自試算表）</summary>
-          <div class="grid3">
-            <div class="field"><label for="allocIC">Iron Condor 單筆上限 %</label><input id="allocIC" type="number" step="any" value="3"></div>
-            <div class="field"><label for="allocCal">Calendar 單筆上限 %</label><input id="allocCal" type="number" step="any" value="2"></div>
-            <div class="field"><label for="maxTrades">最大同時筆數</label><input id="maxTrades" type="number" step="1" value="3"></div>
-            <div class="field"><label for="gainIC">Iron Condor 止盈 %</label><input id="gainIC" type="number" step="any" value="50"><span class="sub">權利金衰減幅度</span></div>
-            <div class="field"><label for="lossIC">Iron Condor 止損 %</label><input id="lossIC" type="number" step="any" value="50"><span class="sub">權利金增加幅度</span></div>
-            <div class="field"><label for="moveRule">加層所需價格移動 %</label><input id="moveRule" type="number" step="any" value="4"></div>
-            <div class="field"><label for="gainCal">Calendar 止盈 %</label><input id="gainCal" type="number" step="any" value="25"></div>
-            <div class="field"><label for="lossCal">Calendar 止損 %</label><input id="lossCal" type="number" step="any" value="25"></div>
-            <div class="field"><label for="fee">手續費（每口每腿）</label><input id="fee" type="number" step="any" value="0.65"><span class="sub">試算表以 ThinkorSwim 計</span></div>
-            <div class="field"><label for="stratAlloc">策略佔組合 %</label><input id="stratAlloc" type="number" step="any" value="20"><span class="sub">試算表用 20%，課程 L10 寫 25%</span></div>
-            <div class="field"><label for="dteMin">天期下限</label><input id="dteMin" type="number" step="1" value="45"></div>
-            <div class="field"><label for="dteMax">天期上限</label><input id="dteMax" type="number" step="1" value="75"></div>
-            <div class="field"><label for="dTarget">目標 Delta</label><input id="dTarget" type="number" step="any" value="0.15"></div>
-            <div class="field"><label for="dTol">Delta 容許誤差</label><input id="dTol" type="number" step="any" value="0.03"><span class="sub">工具預設，非課程規則</span></div>
-            <div class="field"><label for="atmTol">Calendar 近平價容許 %</label><input id="atmTol" type="number" step="any" value="1"><span class="sub">工具預設，非課程規則</span></div>
-            <div class="field"><label for="rate">無風險利率 %（估計最大獲利用）</label><input id="rate" type="number" step="any" value="4"><span class="sub">工具假設，影響很小</span></div>
-          </div>
-        </details>
-      </section>
+    <div id="grpIC">
+      <div class="g4">
+        <div class="field"><label for="lp">長 Put 履約價</label><input id="lp" type="number" inputmode="decimal" step="any"></div>
+        <div class="field"><label for="sp">短 Put 履約價</label><input id="sp" type="number" inputmode="decimal" step="any"></div>
+        <div class="field"><label for="sc">短 Call 履約價</label><input id="sc" type="number" inputmode="decimal" step="any"></div>
+        <div class="field"><label for="lc">長 Call 履約價</label><input id="lc" type="number" inputmode="decimal" step="any"></div>
+        <div class="field"><label for="credit">收取權利金（每股）</label><input id="credit" type="number" inputmode="decimal" step="any" min="0"></div>
+        <div class="field"><label for="dput">短 Put Delta（選填）</label><input id="dput" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
+        <div class="field"><label for="dcall">短 Call Delta（選填）</label><input id="dcall" type="number" inputmode="decimal" step="any" min="0" max="1"></div>
+      </div>
     </div>
 
-    <!-- results -->
-    <div class="col sticky">
-      <section class="panel" id="results"></section>
+    <div id="grpCal">
+      <div class="g4">
+        <div class="field"><label for="kstrike">履約價（Put，長短腳相同）</label><input id="kstrike" type="number" inputmode="decimal" step="any"></div>
+        <div class="field"><label for="debit">支付權利金（每股）</label><input id="debit" type="number" inputmode="decimal" step="any" min="0"></div>
+        <div class="field"><label for="dtefar">長腳到期天數（選填）</label><input id="dtefar" type="number" inputmode="numeric" step="1" min="0"><span class="sub">應比短腳多約一個月</span></div>
+        <div class="field"><label for="ivest">遠月隱含波動率 IV（%，選填）</label><input id="ivest" type="number" inputmode="decimal" step="any" min="0"><span class="sub">用來估計最大獲利；空白時用 VIX</span></div>
+      </div>
     </div>
-  </div>
 
-  <section class="panel" id="kline" style="margin-top:16px">
-    <h2>4. K 線價格資料來源 <span class="hint">K 線圖會顯示在上方「到期損益」圖的正下方</span></h2>
+    <h3>部位與分層</h3>
+    <div class="grid3">
+      <div class="field"><label for="layers">目前已開的層數</label><input id="layers" type="number" inputmode="numeric" step="1" min="0"></div>
+      <div class="field"><label for="existpx">同標的同到期日既有部位的開倉價</label><input id="existpx" type="number" inputmode="decimal" step="any" min="0"><span class="sub">選填，用來檢查 4% 規則</span></div>
+      <div class="field"><label for="ovr">自訂口數（選填）</label><input id="ovr" type="number" inputmode="numeric" step="1" min="0"><span class="sub">留空則用建議口數</span></div>
+    </div>
+
+    <details class="adv">
+      <summary>進階設定（預設值來自試算表）</summary>
+      <div class="g4">
+        <div class="field"><label for="allocIC">Iron Condor 單筆上限 %</label><input id="allocIC" type="number" step="any" value="3"></div>
+        <div class="field"><label for="allocCal">Calendar 單筆上限 %</label><input id="allocCal" type="number" step="any" value="2"></div>
+        <div class="field"><label for="maxTrades">最大同時筆數</label><input id="maxTrades" type="number" step="1" value="3"></div>
+        <div class="field"><label for="gainIC">Iron Condor 止盈 %</label><input id="gainIC" type="number" step="any" value="50"><span class="sub">權利金衰減幅度</span></div>
+        <div class="field"><label for="lossIC">Iron Condor 止損 %</label><input id="lossIC" type="number" step="any" value="50"><span class="sub">權利金增加幅度</span></div>
+        <div class="field"><label for="moveRule">加層所需價格移動 %</label><input id="moveRule" type="number" step="any" value="4"></div>
+        <div class="field"><label for="gainCal">Calendar 止盈 %</label><input id="gainCal" type="number" step="any" value="25"></div>
+        <div class="field"><label for="lossCal">Calendar 止損 %</label><input id="lossCal" type="number" step="any" value="25"></div>
+        <div class="field"><label for="fee">手續費（每口每腿）</label><input id="fee" type="number" step="any" value="0.65"><span class="sub">試算表以 ThinkorSwim 計</span></div>
+        <div class="field"><label for="stratAlloc">策略佔組合 %</label><input id="stratAlloc" type="number" step="any" value="20"><span class="sub">試算表用 20%，課程 L10 寫 25%</span></div>
+        <div class="field"><label for="dteMin">天期下限</label><input id="dteMin" type="number" step="1" value="45"></div>
+        <div class="field"><label for="dteMax">天期上限</label><input id="dteMax" type="number" step="1" value="75"></div>
+        <div class="field"><label for="dTarget">目標 Delta</label><input id="dTarget" type="number" step="any" value="0.15"></div>
+        <div class="field"><label for="dTol">Delta 容許誤差</label><input id="dTol" type="number" step="any" value="0.03"><span class="sub">工具預設，非課程規則</span></div>
+        <div class="field"><label for="atmTol">Calendar 近平價容許 %</label><input id="atmTol" type="number" step="any" value="1"><span class="sub">工具預設，非課程規則</span></div>
+        <div class="field"><label for="rate">無風險利率 %（估計最大獲利用）</label><input id="rate" type="number" step="any" value="4"><span class="sub">工具假設，影響很小</span></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" id="kline">
+    <h2>4. K 線價格資料來源 <span class="hint">K 線圖會顯示在下方「5. 開倉計畫」的到期損益圖正下方</span></h2>
     <div class="grid2">
       <div class="field"><label for="klProv">行情來源</label>
         <select id="klProv"><option value="twelve">Twelve Data（免費金鑰，美股即時）</option><option value="yahoo">Yahoo Finance（免金鑰，常被瀏覽器擋下）</option></select></div>
@@ -311,10 +334,13 @@ textarea.plan{width:100%;min-height:150px;border:1px solid var(--line);border-ra
     <div class="klstat" id="klStat" role="status"></div>
   </section>
 
+  <section class="panel" id="results"></section>
+
   <footer class="foot">
     <p><b>規則來源：</b>以課程試算表（VTS_Iron_Condor_strategy.xlsx）的儲存格註解與公式為準：Iron Condor 單筆 3%、Calendar 單筆 2%、最多 3 筆、Iron Condor 止盈 0.5 倍與止損 1.5 倍權利金、Calendar 止盈 1.25 倍與止損 0.75 倍權利金、4% 加層規則、短腳 45–75 天。Delta 0.15、標的清單、波動率第 25 百分位也都出自這些註解。</p>
     <p><b>PDF 補充：</b>VIX 15、IV Percentile 30% 或 33% 等數字只出現在 AI 彙整的 PDF，與試算表註解不同，這裡只當參考或可調門檻。</p>
     <p>Calendar 的最大獲利沒有固定公式，這裡是用 Black-Scholes 做的模型估計，並非試算表或課程的數字。這是依規則做的機械計算，不是投資建議。Volatility Barometer 需要 VTS 訂閱資料。實際下單前請確認報價、保證金與你的券商手續費。</p>
+    <p class="disc">本網站與所連結頁面之內容僅為個人資料整理與策略追蹤工具，不構成任何投資建議。</p>
   </footer>
 </div>
 
@@ -891,12 +917,12 @@ const VTS = (function(){
     const host = $('results');
     const tag = active === 'IC' ? '<span class="tag ic">Iron Condor</span>' : '<span class="tag cal">Calendar</span>';
     if (!r.ready){
-      let h = '<h2>開倉計畫 '+tag+'</h2>';
+      let h = '<h2>5. 開倉計畫 '+tag+'</h2>';
       if (r.errors && r.errors.length) h += '<div class="errs">'+r.errors.map(e=>'<span>'+esc(e)+'</span>').join('')+'</div>';
       else {
         const NAMES = {nlv:'總淨清算價值',spot:'現價',lp:'長 Put 履約價',sp:'短 Put 履約價',sc:'短 Call 履約價',lc:'長 Call 履約價',credit:'收取權利金',kstrike:'履約價',debit:'支付權利金'};
         const miss = (r.missing || []).map(k => NAMES[k] || k);
-        h += '<p class="empty">' + (miss.length ? '還缺：' + esc(miss.join('、')) + '。填完後這裡會算出口數、止盈與止損價位。' : '填完左側的帳戶、標的與權利金，這裡就會算出口數、止盈與止損價位。') + '</p>';
+        h += '<p class="empty">' + (miss.length ? '還缺：' + esc(miss.join('、')) + '。填完後這裡會算出口數、止盈與止損價位。' : '填完上方的帳戶、標的與權利金，這裡就會算出口數、止盈與止損價位。') + '</p>';
       }
       h += kBlock();
       host.innerHTML = h;
@@ -906,37 +932,38 @@ const VTS = (function(){
     const gainLabel = isIC ? '止盈：買回價（每股）降到' : '止盈：價差價值升到';
     const lossLabel = isIC ? '止損：買回價（每股）升到' : '止損：價差價值降到';
     const gainRule = isIC ? '≤ ' : '≥ ', lossRule = isIC ? '≥ ' : '≤ ';
-    let h = '<h2>開倉計畫 '+tag+(isIC?'':'')+'</h2>';
+    let h = '<h2>5. 開倉計畫 '+tag+(isIC?'':'')+'</h2>';
     h += '<div class="bigrow">'+
       '<div class="stat main"><div class="k">'+(r.overridden?'自訂口數':'建議口數')+'</div><div class="v">'+r.contracts+'</div><div class="s">'+(r.overridden?'建議 '+r.recContracts+' 口':'無條件捨去')+'</div></div>'+
       '<div class="stat"><div class="k">最大虧損</div><div class="v">'+usd(r.maxLoss)+'</div><div class="s">佔淨值 '+pct(r.util)+'；上限 '+usd(r.allocDollar)+'</div></div>'+
       '<div class="stat"><div class="k">'+(isIC?'最大獲利':'每口成本')+'</div><div class="v">'+(isIC?usd(r.maxProfit):usd(r.maxLossPer))+'</div><div class="s">'+(isIC?'到期且在兩個短腳之間':'支付的權利金 × 100')+'</div></div></div>';
 
-    h += '<h3>止盈與止損價位</h3><div class="tblwrap"><table><thead><tr><th>出場</th><th class="r">價位（每股）</th><th class="r">損益</th><th class="r">扣手續費後</th></tr></thead><tbody>'+
+    let hL = '', hR = '';
+    hL += '<h3>止盈與止損價位</h3><div class="tblwrap"><table><thead><tr><th>出場</th><th class="r">價位（每股）</th><th class="r">損益</th><th class="r">扣手續費後</th></tr></thead><tbody>'+
       '<tr><td><span class="lvl g"></span>'+gainLabel+'</td><td class="r"><span class="num" title="'+(r.gainPrem)+'">'+gainRule+prem(r.gainPrem)+'</span></td><td class="r"><span class="num pos">'+sgn(r.gainDollar)+'</span></td><td class="r"><span class="num pos">'+sgn(r.gainNet)+'</span></td></tr>'+
       '<tr><td><span class="lvl l"></span>'+lossLabel+'</td><td class="r"><span class="num" title="'+(r.lossPrem)+'">'+lossRule+prem(r.lossPrem)+'</span></td><td class="r"><span class="num neg">'+sgn(r.lossDollar)+'</span></td><td class="r"><span class="num neg">'+sgn(r.lossNet)+'</span></td></tr>'+
       '</tbody></table></div>';
-    h += '<p class="hint" style="margin-top:6px">'+(isIC
+    hL += '<p class="hint" style="margin-top:6px">'+(isIC
       ? '開倉權利金 '+prem(p.credit)+'。以接近目標價的限價單平倉；止盈是賺到一半權利金，止損是虧掉一半權利金。'
       : '開倉成本 '+prem(p.debit)+'。價差價值高於止盈價或低於止損價時平倉，且不持有跨越近月到期日。')+
       ' 手續費以 '+r.contracts+' 口 × '+(isIC?4:2)+' 腿 × 開平倉 2 次估算。</p>';
 
-    h += '<h3>風險與報酬</h3><dl class="kv">'+
+    hL += '<h3>風險與報酬</h3><dl class="kv">'+
       '<dt>手續費（開平倉合計）</dt><dd>'+usd(r.fees,2)+(r.feePct!=null?'（最大虧損的 '+pct(r.feePct)+'）':'')+'</dd>'+
       '<dt>止盈對組合報酬</dt><dd>'+spct(r.gainPortPct)+'</dd>'+
       '<dt>止損對組合報酬</dt><dd>'+spct(r.lossPortPct)+'</dd>'+
       (r.gainStratPct!=null?'<dt>止盈／止損對策略配置報酬（'+numOf('stratAlloc')+'%）</dt><dd>'+spct(r.gainStratPct)+' ／ '+spct(r.lossStratPct)+'</dd>':'');
     if (isIC){
-      h += '<dt>損益兩平價（到期）</dt><dd>'+r.bePut.toFixed(2)+' ／ '+r.beCall.toFixed(2)+'</dd>'+
+      hL += '<dt>損益兩平價（到期）</dt><dd>'+r.bePut.toFixed(2)+' ／ '+r.beCall.toFixed(2)+'</dd>'+
         '<dt>短腳距離現價</dt><dd>'+spct(r.distPut)+' ／ '+spct(r.distCall)+'</dd>'+
         '<dt>獲利機率（試算表算法）</dt><dd>'+pct(r.popSimple,0)+'</dd>'+
         (r.popDelta!=null?'<dt>獲利機率（1 − 兩側 Delta）</dt><dd>'+pct(r.popDelta,0)+'</dd>':'')+
         '<dt>最大獲利／最大虧損</dt><dd>'+(r.rr!=null?r.rr.toFixed(2):'—')+'</dd>';
     } else {
-      h += '<dt>履約價距離現價</dt><dd>'+spct(r.dist)+'</dd>';
+      hL += '<dt>履約價距離現價</dt><dd>'+spct(r.dist)+'</dd>';
     }
-    h += '<dt>下一層須等價格</dt><dd>≤ '+r.lowThr.toFixed(2)+' 或 ≥ '+r.highThr.toFixed(2)+'</dd></dl>';
-    if (isIC) h += '<p class="hint" style="margin-top:6px">「試算表算法」是 (翼寬 − 權利金) ÷ 翼寬，只是簡化的估計，並非真正的機率。</p>';
+    hL += '<dt>下一層須等價格</dt><dd>≤ '+r.lowThr.toFixed(2)+' 或 ≥ '+r.highThr.toFixed(2)+'</dd></dl>';
+    if (isIC) hL += '<p class="hint" style="margin-top:6px">「試算表算法」是 (翼寬 − 權利金) ÷ 翼寬，只是簡化的估計，並非真正的機率。</p>';
 
     if (!isIC){
       const dteN = numOf('dte'), farN = numOf('dtefar');
@@ -952,7 +979,7 @@ const VTS = (function(){
       }
       if (r.est){
         const e = r.est, c = Math.max(r.contracts, 1), mp = e.maxPs*100*c;
-        h += '<h3>預估最大獲利（模型估計）</h3><dl class="kv">'+
+        hR += '<h3>預估最大獲利（模型估計）</h3><dl class="kv">'+
           '<dt>近月到期、價格在 '+e.maxPrice.toFixed(1)+' 附近</dt><dd>'+usd(mp)+(r.contracts===0?'（以 1 口計）':'')+'</dd>'+
           '<dt>預估獲利／最大虧損</dt><dd>'+(r.maxLoss>0 || r.contracts===0 ? (mp/(r.maxLossPer*c)).toFixed(2) : '—')+'</dd>'+
           '<dt>近月到期的損益兩平區間</dt><dd>'+(e.beLow!=null && e.beHigh!=null ? e.beLow.toFixed(1)+' ～ '+e.beHigh.toFixed(1)+'（'+spct(e.beLow/p.spot-1,1)+' ～ '+spct(e.beHigh/p.spot-1,1)+'）' : '無獲利區間')+'</dd>'+
@@ -961,16 +988,17 @@ const VTS = (function(){
           '<p class="hint" style="margin-top:6px">用 Black-Scholes 估計：假設近月到期時遠月 IV 維持 '+e.ivPct.toFixed(1)+'%'+(e.fromVix?'（取自 VIX，可在「長腳到期天數」下方填入遠月 IV）':'')+'、利率 '+(e.rate*100).toFixed(1)+'%、遠月在近月到期時還剩 '+e.daysRem+' 天'+(e.daysAssumed?'（未填長腳天數，以 30 天假設）':'')+'。實際會隨 IV 變化與買賣價差而不同，請只當作量級參考。這個數字不是試算表或課程的規則；策略本身在 +25% 時就會停利。</p>';
       }
     }
+    const checks = buildChecks(active, p, r, env, mode);
+    const sym = {ok:'✓',warn:'!',bad:'×',info:'i'};
+    hR += '<h3>規則檢查</h3><ul class="checks">'+checks.map(c =>
+      '<li><span class="ci '+c.s+'" aria-label="'+({ok:'符合',warn:'注意',bad:'不符',info:'提示'})[c.s]+'">'+sym[c.s]+'</span><span>'+esc(c.t)+(c.d?'<span class="d">'+esc(c.d)+'</span>':'')+'</span></li>').join('')+'</ul>';
+
+    h += '<div class="rgrid"><div>'+hL+'</div><div>'+hR+'</div></div>';
     const ch = chartSVG(active, p, r);
     h += '<h3>'+(isIC ? '到期損益' : (r.est ? '近月到期時的預估損益（模型）' : '價位尺'))+'</h3><div class="chartbox">'+ch.svg+'</div>';
     h += (isIC || r.est) ? '<div class="readout" id="readout">移動滑鼠或手指，查看各價位的到期損益'+ (ch.hover && ch.hover.note || '') +'。</div>'
               : '<p class="hint">Calendar 的損益取決於時間與波動率。填入 VIX 或遠月 IV，就能顯示預估損益曲線。</p>';
     h += kBlock();
-
-    const checks = buildChecks(active, p, r, env, mode);
-    const sym = {ok:'✓',warn:'!',bad:'×',info:'i'};
-    h += '<h3>規則檢查</h3><ul class="checks">'+checks.map(c =>
-      '<li><span class="ci '+c.s+'" aria-label="'+({ok:'符合',warn:'注意',bad:'不符',info:'提示'})[c.s]+'">'+sym[c.s]+'</span><span>'+esc(c.t)+(c.d?'<span class="d">'+esc(c.d)+'</span>':'')+'</span></li>').join('')+'</ul>';
 
     h += '<h3>交易計畫</h3><textarea class="plan" id="plan" readonly aria-label="交易計畫文字"></textarea>'+
       '<div class="btn-row" style="margin-top:8px"><button class="btn primary" id="btnCopy" type="button">複製交易計畫</button><span class="hint" id="copyMsg" style="align-self:center"></span></div>';
@@ -1174,7 +1202,7 @@ const VTS = (function(){
     }
     if (stretched) L += '<div class="hint">為了看得清楚，右側色帶的寬度有放大，不是等比例的時間長度。</div>';
     if (proj > 0){ L += '<div>短腳到期日約 '+expDate+'（最後一根 K 線 '+last.d+' 加 '+dte+' 天）'+(active==='CAL' && dteFar != null && dteFar > dte ? '；長腳約 '+addDays(last.d, dteFar)+'，在圖右側之外。' : '。')+'</div>'; }
-    else L += '<div>在左側填入「到期天數（短腳）」，就會畫出到期區間。</div>';
+    else L += '<div>在上方填入「到期天數（短腳）」，就會畫出到期區間。</div>';
     lg.innerHTML = L;
   }
   $('klLoad').addEventListener('click', () => ingest($('klText').value));
