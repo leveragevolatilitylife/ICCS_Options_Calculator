@@ -1052,9 +1052,10 @@ const VTS = (function(){
     const lo = Math.min(r.lowThr, p.kstrike, p.spot), hi = Math.max(r.highThr, p.kstrike, p.spot);
     const pad = (hi-lo)*0.25, x0 = lo-pad, x1 = hi+pad;
     const fn = S => e.fn(S)*100*c;
+    const nc = nowCurve('CAL', p, c);
     const N = 140; const pts = [];
     let maxPL = -Infinity;
-    for (let i = 0; i <= N; i++){ const S = x0 + (x1-x0)*i/N; const v = fn(S); pts.push([S,v]); if (v > maxPL) maxPL = v; }
+    for (let i = 0; i <= N; i++){ const S = x0 + (x1-x0)*i/N; const v = fn(S); pts.push([S,v]); if (v > maxPL) maxPL = v; if (nc){ const w = nc.fn(S); if (w > maxPL) maxPL = w; } }
     const ml = -r.maxLossPer*c;
     const yTop = (maxPL > 0 ? maxPL : -ml*0.2)*1.18, yBot = ml*1.18;
     const X = v => L + (v-x0)/(x1-x0)*iw;
@@ -1076,6 +1077,7 @@ const VTS = (function(){
     });
     s += '<line x1="'+X(p.spot).toFixed(1)+'" x2="'+X(p.spot).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink)" stroke-width="1.5"/>';
     s += '<path d="'+path+'" fill="none" stroke="var(--cal)" stroke-width="2.5" stroke-linejoin="round"/>';
+    if (nc) s += nowPath(nc, x0, x1, X, Y, yBot, yTop);
     s += '<circle cx="'+X(e.maxPrice).toFixed(1)+'" cy="'+Y(fn(e.maxPrice)).toFixed(1)+'" r="4" fill="var(--surface)" stroke="var(--cal)" stroke-width="2"/>';
     s += '<text class="svgt k" x="'+X(p.kstrike).toFixed(1)+'" y="'+(T-18)+'" text-anchor="middle">履約價</text><text class="svgt" x="'+X(p.kstrike).toFixed(1)+'" y="'+(T-6)+'" text-anchor="middle">'+p.kstrike+'</text>';
     const bt = H-26;
@@ -1084,10 +1086,26 @@ const VTS = (function(){
     s += '<text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">+4%</text><text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.highThr.toFixed(1)+'</text>';
     s += '<line id="xh" x1="0" x2="0" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--cal)" stroke-width="1" style="display:none"/>';
     s += '<rect id="hit" x="'+L+'" y="'+T+'" width="'+iw+'" height="'+ih+'" fill="transparent"/></svg>';
-    return {svg:s, hover:{x0,x1,L,iw,X,fn,note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
+    return {svg:s, now:nc, hover:{x0,x1,L,iw,X,fn,fn2:nc && nc.fn,note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
   }
 
   /* ---------- chart ---------- */
+  /* "Today" curve: model value of the position now (held days since the open date of the loaded position). */
+  function nowCurve(active, p, c){
+    if (!(anchor && anchor.ticker === ($('ticker').value || '').trim().toUpperCase())) return null;
+    const dte = numOf('dte'); if (dte == null) return null;
+    const held = Math.max(0, VTS.dayDiff(anchor.date, todayStr())); if (held < 1) return null;
+    const far = numOf('dtefar'), dFar = (far != null && far > dte ? far : dte + 30) + held;
+    const ivIn = numOf('ivest'), vixV = numOf('vix'), rate = (numOf('rate') ?? 4)/100;
+    let iv, src;
+    if (LIVE && LIVE.far){ iv = LIVE.far.iv; src = '即時遠月 IV'; } else if (ivIn != null && ivIn > 0){ iv = ivIn; src = '填入的 IV'; } else if (LIVE && LIVE.vix){ iv = LIVE.vix.v; src = '即時 VIX'; } else if (vixV != null && vixV > 0){ iv = vixV; src = '填入的 VIX'; } else { iv = 20; src = '預設 20%'; }
+    const q = active === 'IC' ? {type:'IC', lp:p.lp, sp:p.sp, sc:p.sc, lc:p.lc, credit:p.credit} : {type:'CAL', K:p.kstrike, debit:p.debit};
+    return {fn:S => VTS.posPL(q, S, dte + held, dFar, held, iv/100, rate)*100*c, iv, src, held};
+  }
+  function nowPath(nc, x0, x1, X, Y, yLo, yHi){
+    const N = 120, pts = []; for (let i = 0; i <= N; i++){ const S = x0 + (x1-x0)*i/N; pts.push([S, Math.max(yLo, Math.min(yHi, nc.fn(S)))]); }
+    return '<path d="'+pts.map((a,i)=>(i?'L':'M')+X(a[0]).toFixed(1)+' '+Y(a[1]).toFixed(1)).join(' ')+'" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-dasharray="6 4" stroke-linejoin="round"/>';
+  }
   function chartSVG(active, p, r){
     const W = 640, H = 260, L = 58, R = 16, T = 34, B = 44;
     const iw = W-L-R, ih = H-T-B;
@@ -1100,6 +1118,7 @@ const VTS = (function(){
       const yTop = mp*1.18, yBot = ml*1.18;
       const X = v => L + (v-x0)/(x1-x0)*iw;
       const Y = v => T + (yTop-v)/(yTop-yBot)*ih;
+      const nc = nowCurve('IC', p, c);
       const pts = [x0, p.lp, p.sp, p.sc, p.lc, x1];
       const path = pts.map((x,i)=> (i?'L':'M') + X(x).toFixed(1) + ' ' + Y(VTS.payoffIC(p, rr, x)).toFixed(1)).join(' ');
       const z = Y(0).toFixed(1);
@@ -1117,6 +1136,7 @@ const VTS = (function(){
       });
       s += '<line x1="'+X(p.spot).toFixed(1)+'" x2="'+X(p.spot).toFixed(1)+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ink)" stroke-width="1.5"/>';
       s += '<path d="'+path+'" fill="none" stroke="var(--ic)" stroke-width="2.5" stroke-linejoin="round"/>';
+      if (nc) s += nowPath(nc, x0, x1, X, Y, yBot, yTop);
       [['長P',p.lp],['短P',p.sp],['短C',p.sc],['長C',p.lc]].forEach(a => {
         s += '<circle cx="'+X(a[1]).toFixed(1)+'" cy="'+Y(VTS.payoffIC(p, rr, a[1])).toFixed(1)+'" r="4" fill="var(--surface)" stroke="var(--ic)" stroke-width="2"/>';
         s += '<text class="svgt k" x="'+X(a[1]).toFixed(1)+'" y="'+(T-18)+'" text-anchor="middle">'+a[0]+'</text><text class="svgt" x="'+X(a[1]).toFixed(1)+'" y="'+(T-6)+'" text-anchor="middle">'+a[1]+'</text>';
@@ -1127,7 +1147,7 @@ const VTS = (function(){
       s += '<text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+bt+'" text-anchor="middle">+4%</text><text class="svgt" x="'+X(r.highThr).toFixed(1)+'" y="'+(bt+12)+'" text-anchor="middle">'+r.highThr.toFixed(1)+'</text>';
       s += '<line id="xh" x1="0" x2="0" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--ic)" stroke-width="1" style="display:none"/>';
       s += '<rect id="hit" x="'+L+'" y="'+T+'" width="'+iw+'" height="'+ih+'" fill="transparent"/></svg>';
-      return {svg:s, hover:{x0,x1,L,iw,X,fn:v=>VTS.payoffIC(p, rr, v), note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
+      return {svg:s, now:nc, hover:{x0,x1,L,iw,X,fn:v=>VTS.payoffIC(p, rr, v), fn2:nc && nc.fn, note: r.contracts===0 ? '（以 1 口顯示）' : ''}};
     }
     if (r.est) return chartCal(p, r);
     /* Calendar: price ruler only (no IV available) */
@@ -1237,6 +1257,7 @@ const VTS = (function(){
                                     : '<div>'+blk(hL1)+blk(hChk)+'</div><div>'+blk(hL)+(hR ? blk(hR) : '')+'</div>')+'</div>';
     const ch = chartSVG(active, p, r);
     h += '<h3>'+(isIC ? '到期損益' : (r.est ? '近月到期時的預估損益（模型）' : '價位尺'))+'</h3><div class="chartbox">'+ch.svg+'</div>';
+    if (ch.now) h += '<div class="kllegend"><span style="margin-right:14px"><span class="sw" style="background:var(--'+(isIC?'ic':'cal')+')"></span>到期損益</span><span class="sw" style="background:var(--amber)"></span>今天（持有 '+ch.now.held+' 天，Black-Scholes，IV '+ch.now.iv.toFixed(1)+'%，取自'+ch.now.src+'）<div>虛線是現在的模型損益，所有履約價用同一個 IV，只當參考；實際損益以券商報價為準。</div></div>';
     h += (isIC || r.est) ? '<div class="readout" id="readout">移動滑鼠或手指，查看各價位的到期損益'+ (ch.hover && ch.hover.note || '') +'。</div>'
               : '<p class="hint">Calendar 的損益取決於時間與波動率。填入 VIX 或遠月 IV，就能顯示預估損益曲線。</p>';
     h += kBlock();
@@ -1260,7 +1281,7 @@ const VTS = (function(){
       const price = hv.x0 + (x-hv.L)/hv.iw*(hv.x1-hv.x0);
       const pl = hv.fn(price);
       xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.style.display = '';
-      ro.innerHTML = '價格 <b>'+price.toFixed(2)+'</b>　到期損益 <b class="'+(pl>=0?'pos':'neg')+'">'+sgn(Math.round(pl))+'</b>';
+      ro.innerHTML = '價格 <b>'+price.toFixed(2)+'</b>　到期損益 <b class="'+(pl>=0?'pos':'neg')+'">'+sgn(Math.round(pl))+'</b>' + (hv.fn2 ? (function(){ const v = hv.fn2(price); return '　今天（模型） <b class="'+(v>=0?'pos':'neg')+'">'+sgn(Math.round(v))+'</b>'; })() : '');
     };
     hit.addEventListener('pointermove', move);
     hit.addEventListener('pointerdown', move);
