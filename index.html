@@ -823,8 +823,21 @@ const VTS = (function(){
     return out;
   }
   const serialDate = n => new Date(Math.round((n - 25569)*86400000)).toISOString().slice(0,10);
-  /* Course workbook layout: header row 7, trades from row 8/9. B type, C open, D ticker, E NLV, G open price, H expiry,
-     J VIX, K IVP (fraction), L Barometer (fraction), O/P/Q/R strikes, S premium, T contracts, AH close date, AK close premium, AS notes. */
+  /* Course workbook: columns are found by their header text (so inserted columns such as "Expiration date (Distant-month)" are fine).
+     Old fixed layout is the fallback when no header row is found. */
+  const HDR = [['type',/trade type/],['open',/^open date/],['ticker',/^ticker/],['nlv',/net liquidation/],['px',/^open price/],['near',/near-month/],['far',/distant-month/],
+    ['vix',/^vix/],['ivp',/iv percentile/],['baro',/barometer/],['lp',/long put strike/],['sp',/short put strike/],['sc',/short call strike/],['lc',/long call strike/],
+    ['prem',/^open premium/],['n',/# of contracts/],['cdate',/^close date/],['cpx',/close premium/],['note',/^notes/]];
+  const OLD_COLS = {type:'B',open:'C',ticker:'D',nlv:'E',px:'G',near:'H',vix:'J',ivp:'K',baro:'L',lp:'O',sp:'P',sc:'Q',lc:'R',prem:'S',n:'T',cdate:'AH',cpx:'AK',note:'AS'};
+  function findCols(sh){
+    for (const rn of Object.keys(sh.rows).map(Number).sort((a,b) => a-b)){
+      const cand = {};
+      Object.keys(sh.rows[rn]).forEach(c => { const v = sh.rows[rn][c]; if (typeof v !== 'string') return;
+        const t = v.replace(/\s+/g,' ').trim().toLowerCase(); HDR.forEach(h => { if (!cand[h[0]] && h[1].test(t)) cand[h[0]] = c; }); });
+      if (cand.type && cand.open && cand.near && cand.prem && cand.n) return {col:cand, hdr:rn};
+    }
+    return {col:OLD_COLS, hdr:7};
+  }
   function positionsFromSheets(sheets, o){
     o = o || {};
     const gIC = isNum(o.gainIC) ? o.gainIC : 50, lIC = isNum(o.lossIC) ? o.lossIC : 50, gC = isNum(o.gainCal) ? o.gainCal : 25, lC = isNum(o.lossCal) ? o.lossCal : 25;
@@ -832,26 +845,29 @@ const VTS = (function(){
     const list = [], skipped = [];
     const r4 = x => Math.round(x*10000)/10000;
     sheets.forEach(sh => {
+      const {col, hdr} = findCols(sh);
       Object.keys(sh.rows).map(Number).sort((a,b) => a-b).forEach(rn => {
-        if (rn < 8) return;
-        const r = sh.rows[rn], ty = typeof r.B === 'string' ? r.B.trim().toLowerCase() : '';
+        if (rn <= hdr) return;
+        const R = sh.rows[rn], g = k => R[col[k]], ty = typeof g('type') === 'string' ? g('type').trim().toLowerCase() : '';
         const type = /^iron condor/.test(ty) ? 'IC' : (/^calendar/.test(ty) ? 'CAL' : null);
         if (!type) return;
         const where = sh.name + ' 第 ' + rn + ' 列';
-        if (typeof r.A === 'string' && /example|範例/i.test(r.A)){ skipped.push(where + '（課程範例交易）'); return; }
-        if (!isNum(r.C) || !isNum(r.H) || !isNum(r.S) || !isNum(r.T)){ skipped.push(where + '（缺少開倉日、到期日、權利金或口數）'); return; }
-        const q = {type, ticker:String(r.D || '—').trim().toUpperCase(), openDate:serialDate(r.C), expiry:serialDate(r.H), contracts:Math.round(r.T),
-          spotOpen:isNum(r.G) ? r.G : null, nlv:isNum(r.E) ? r.E : null, vix:isNum(r.J) ? r.J : null,
-          ivp:isNum(r.K) ? r4(r.K*100) : null, baro:isNum(r.L) ? r4(r.L*100) : null, feeLeg, src:'excel',
-          note:(typeof r.AS === 'string' ? r.AS.trim() : '') || ('來自 Excel：' + where)};
+        if (typeof R.A === 'string' && /example|範例/i.test(R.A)){ skipped.push(where + '（課程範例交易）'); return; }
+        if (!isNum(g('open')) || !isNum(g('near')) || !isNum(g('prem')) || !isNum(g('n'))){ skipped.push(where + '（缺少開倉日、到期日、權利金或口數）'); return; }
+        const note = g('note');
+        const q = {type, ticker:String(g('ticker') || '—').trim().toUpperCase(), openDate:serialDate(g('open')), expiry:serialDate(g('near')), contracts:Math.round(g('n')),
+          spotOpen:isNum(g('px')) ? g('px') : null, nlv:isNum(g('nlv')) ? g('nlv') : null, vix:isNum(g('vix')) ? g('vix') : null,
+          ivp:isNum(g('ivp')) ? r4(g('ivp')*100) : null, baro:isNum(g('baro')) ? r4(g('baro')*100) : null, feeLeg, src:'excel',
+          note:(typeof note === 'string' ? note.trim() : '') || ('來自 Excel：' + where)};
         if (type === 'IC'){
-          q.lp = r.O; q.sp = r.P; q.sc = r.Q; q.lc = r.R; q.credit = r.S;
-          q.tpPrem = r.S*(1 - gIC/100); q.slPrem = r.S*(1 + lIC/100);
+          q.lp = g('lp'); q.sp = g('sp'); q.sc = g('sc'); q.lc = g('lc'); q.credit = g('prem');
+          q.tpPrem = q.credit*(1 - gIC/100); q.slPrem = q.credit*(1 + lIC/100);
         } else {
-          q.K = isNum(r.P) ? r.P : r.O; q.debit = r.S;
-          q.tpPrem = r.S*(1 + gC/100); q.slPrem = r.S*(1 - lC/100);
+          q.K = isNum(g('sp')) ? g('sp') : g('lp'); q.debit = g('prem');
+          q.tpPrem = q.debit*(1 + gC/100); q.slPrem = q.debit*(1 - lC/100);
+          if (isNum(g('far'))) q.farExpiry = serialDate(g('far'));
         }
-        if (isNum(r.AH) && isNum(r.AK)){ q.status = 'closed'; q.closeDate = serialDate(r.AH); q.closePx = r.AK; } else q.status = 'open';
+        if (isNum(g('cdate')) && isNum(g('cpx'))){ q.status = 'closed'; q.closeDate = serialDate(g('cdate')); q.closePx = g('cpx'); } else q.status = 'open';
         q.id = ('x' + type + q.openDate.replace(/-/g,'') + '_' + (type === 'IC' ? q.sp : q.K) + '_' + q.ticker).replace(/[^A-Za-z0-9_-]/g,'').slice(0,40);
         list.push(q);
       });
@@ -1098,7 +1114,8 @@ const VTS = (function(){
     const far = numOf('dtefar'), dFar = (far != null && far > dte ? far : dte + 30) + held;
     const ivIn = numOf('ivest'), vixV = numOf('vix'), rate = (numOf('rate') ?? 4)/100;
     let iv, src;
-    if (LIVE && LIVE.far){ iv = LIVE.far.iv; src = '即時遠月 IV'; } else if (ivIn != null && ivIn > 0){ iv = ivIn; src = '填入的 IV'; } else if (LIVE && LIVE.vix){ iv = LIVE.vix.v; src = '即時 VIX'; } else if (vixV != null && vixV > 0){ iv = vixV; src = '填入的 VIX'; } else { iv = 20; src = '預設 20%'; }
+    const lq = POS.find(x => x.id === loadedId), ld = lq ? legData(lq) : null;
+    if (ld && ld.iv){ iv = ld.iv; src = '持倉長腳的 Cboe IV'; } else if (LIVE && LIVE.far){ iv = LIVE.far.iv; src = '即時遠月 IV'; } else if (ivIn != null && ivIn > 0){ iv = ivIn; src = '填入的 IV'; } else if (LIVE && LIVE.vix){ iv = LIVE.vix.v; src = '即時 VIX'; } else if (vixV != null && vixV > 0){ iv = vixV; src = '填入的 VIX'; } else { iv = 20; src = '預設 20%'; }
     const q = active === 'IC' ? {type:'IC', lp:p.lp, sp:p.sp, sc:p.sc, lc:p.lc, credit:p.credit} : {type:'CAL', K:p.kstrike, debit:p.debit};
     return {fn:S => VTS.posPL(q, S, dte + held, dFar, held, iv/100, rate)*100*c, iv, src, held};
   }
@@ -1548,8 +1565,8 @@ const VTS = (function(){
   function pctRank(arr, v){ const a = arr.filter(x => isFinite(x)); if (a.length < 120) return null; return a.filter(x => x < v).length / a.length * 100; }
   function parseOcc(o){ const m = /^([A-Z0-9]+?)(\d{6})([CP])(\d{8})$/.exec(o || ''); return m ? {date:'20' + m[2].slice(0,2) + '-' + m[2].slice(2,4) + '-' + m[2].slice(4,6), type:m[3], K:Number(m[4])/1000} : null; }
   let VOLJ = null;
-  async function volFile(){
-    if (VOLJ !== null) return VOLJ || null;
+  async function volFile(force){
+    if (VOLJ !== null && !force) return VOLJ || null;
     try { const j = await getJSON('data/vol.json?t=' + Date.now()); VOLJ = (j && j.updated) ? j : false; } catch(e){ VOLJ = false; }
     return VOLJ || null;
   }
@@ -1597,10 +1614,11 @@ const VTS = (function(){
   async function fetchVol(){
     if (volBusy) return; volBusy = true;
     const sym = ($('ticker').value || '').trim().toUpperCase(), next = {stamp:stamp()};
+    await volFile(true);
     const [a, c] = await Promise.allSettled([volVix(), sym ? volFar(sym) : Promise.reject(new Error('先填標的代號'))]);
     if (a.status === 'fulfilled') next.vix = a.value; else next.vixErr = (a.reason && a.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(a.reason && a.reason.message || a.reason);
     if (c.status === 'fulfilled') next.far = c.value; else next.farErr = (c.reason && c.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(c.reason && c.reason.message || c.reason);
-    LIVE = next; volBusy = false; renderLive();
+    LIVE = next; volBusy = false; update();
   }
   let liveBusy = false, lastVol = 0;
   async function fetchLive(fromTimer){
@@ -1668,17 +1686,31 @@ const VTS = (function(){
       warns.map(w => '<div class="pwarn">' + w + '</div>').join('') + '</div>';
   }
 
+  function legData(q){
+    const f = VOLJ; if (!f || !Array.isArray(f.legs)) return null;
+    const find = (date, ty, K) => f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.mid != null);
+    let mark, iv, txt;
+    if (q.type === 'CAL'){
+      if (!q.farExpiry) return null;
+      const n = find(q.expiry, 'P', q.K), fr = find(q.farExpiry, 'P', q.K); if (!n || !fr) return null;
+      mark = fr.mid - n.mid; iv = fr.iv; txt = '長腳 ' + q.farExpiry + ' 中間價 ' + prem(fr.mid) + '（買 ' + fr.bid + '／賣 ' + fr.ask + '）減 短腳 ' + q.expiry + ' 中間價 ' + prem(n.mid) + '（買 ' + n.bid + '／賣 ' + n.ask + '）';
+    } else {
+      const a = find(q.expiry, 'P', q.sp), b = find(q.expiry, 'P', q.lp), c = find(q.expiry, 'C', q.sc), d = find(q.expiry, 'C', q.lc); if (!a || !b || !c || !d) return null;
+      mark = a.mid - b.mid + c.mid - d.mid; iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null; txt = '買回四隻腳的中間價合計（短 Put ' + prem(a.mid) + '、長 Put ' + prem(b.mid) + '、短 Call ' + prem(c.mid) + '、長 Call ' + prem(d.mid) + '）';
+    }
+    return {mark, iv, txt, updated:(f.updated || '').replace('T',' ').slice(0,16) + ' UTC'};
+  }
   function estMark(q){
     const tm = times(q), spot = spotFor(q); if (spot == null || tm.dShort <= 0) return null;
     const ivIn = numOf('ivest'), vixV = numOf('vix');
-    const ivPct = q.iv != null ? q.iv : ((ivIn != null && ivIn > 0) ? ivIn : ((vixV != null && vixV > 0) ? vixV : (q.vix != null ? q.vix : 20)));
+    const lgd = legData(q), ivPct = q.iv != null ? q.iv : (lgd && lgd.iv ? lgd.iv : (ivIn != null && ivIn > 0) ? ivIn : ((vixV != null && vixV > 0) ? vixV : (q.vix != null ? q.vix : 20)));
     const rate = (numOf('rate') ?? 4)/100;
     const plPs = VTS.posPL(q, spot, tm.dShort, tm.dFar, 0, ivPct/100, rate);
     const mark = q.type === 'IC' ? q.credit - plPs : q.debit + plPs;
     return {mark, pl:plPs*100*q.contracts, ivPct, spot};
   }
   function openCard(q){
-    const tm = times(q), ex = VTS.exposure(q), isIC = q.type === 'IC', spot = spotFor(q), mark = q.mark;
+    const tm = times(q), ex = VTS.exposure(q), isIC = q.type === 'IC', spot = spotFor(q), manual = q.mark, lg = manual == null ? legData(q) : null, mark = manual != null ? manual : (lg ? lg.mark : null);
     let st = 'ok', stTxt = '進行中';
     if (tm.dShort < 0){ st = 'warn'; stTxt = '已過到期日'; }
     else if (mark != null){ const k = VTS.posStatus(q, mark); if (k === 'tp'){ st = 'tp'; stTxt = '已達止盈價'; } else if (k === 'sl'){ st = 'sl'; stTxt = '已達止損價'; } }
@@ -1704,11 +1736,12 @@ const VTS = (function(){
     if (q.note) b += '<p class="hint">備註：' + esc(q.note) + '</p>';
     b += '</div>';
     let c = '<div class="pc"><div class="g2c"><div class="field"><label>標的現價（自動）</label><div class="num" style="padding:9px 0">' + (spot != null ? spot : '—') + '</div></div>' +
-      '<div class="field"><label>' + (isIC ? '目前買回價（每股）' : '目前價差價值（每股）') + '</label><input type="number" inputmode="decimal" step="any" min="0" data-f="mark" value="' + (mark != null ? mark : '') + '" placeholder="券商報價"></div></div>';
+      '<div class="field"><label>' + (isIC ? '目前買回價（每股）' : '目前價差價值（每股）') + '</label><input type="number" inputmode="decimal" step="any" min="0" data-f="mark" value="' + (manual != null ? manual : '') + '" placeholder="' + (lg ? '自動：' + lg.mark.toFixed(2) : '券商報價') + '"></div></div>';
     if (mark != null){
       const pl = VTS.unrealized(q, mark), frac = Math.max(0, Math.min(1, isIC ? (q.slPrem - mark)/(q.slPrem - q.tpPrem) : (mark - q.slPrem)/(q.tpPrem - q.slPrem)));
       c += '<div><div class="pl ' + (pl >= 0 ? 'pos' : 'neg') + '">' + sgn(Math.round(pl)) + ' <span class="hint">未實現（未扣手續費）</span></div>' +
-        '<div class="hint">佔最大虧損 ' + spct(pl/ex.maxLoss, 1) + (ex.maxProfit ? '；佔最大獲利 ' + spct(pl/ex.maxProfit, 1) : '') + '</div></div>' +
+        '<div class="hint">佔最大虧損 ' + spct(pl/ex.maxLoss, 1) + (ex.maxProfit ? '；佔最大獲利 ' + spct(pl/ex.maxProfit, 1) : '') + '</div>' +
+        (lg ? '<div class="hint">' + (isIC ? '買回價' : '價差價值') + ' ' + prem(mark) + '＝' + lg.txt + '。Cboe 延遲報價（約 15 分鐘），資料時間 ' + lg.updated + '；不是你券商的成交價，要改用券商報價請填在右上欄。</div>' : '') + '</div>' +
         '<div><div class="pbar"><i style="left:' + (frac*100).toFixed(1) + '%"></i></div><div class="pbl"><span>止損 ' + prem(q.slPrem) + '</span><span>止盈 ' + prem(q.tpPrem) + '</span></div></div>';
     } else {
       const es = estMark(q);
