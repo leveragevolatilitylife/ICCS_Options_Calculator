@@ -1391,10 +1391,15 @@ const VTS = (function(){
     const near = v => isFinite(v) && v > last.c*0.7 && v < last.c*1.3;
     const lvItems = lv ? lv.items.filter(i => near(i.price)) : [];
     lvItems.forEach(i => { lo = Math.min(lo, i.price); hi = Math.max(hi, i.price); });
+    const nowBE = [];
+    if (r.ready){ const nc = nowCurve(active, p, Math.max(r.contracts, 1));
+      if (nc){ const a0 = last.c*0.7, N = 500; let pS = a0, pV = nc.fn(a0);
+        for (let i = 1; i <= N; i++){ const S = a0 + last.c*0.6*i/N, v = nc.fn(S); if ((pV < 0) !== (v < 0) && pV !== v) nowBE.push(pS + (0-pV)/(v-pV)*(S-pS)); pS = S; pV = v; }
+        nowBE.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); }); nowBE.nc = nc; } }
     if (near(p.spot)){ lo = Math.min(lo, p.spot); hi = Math.max(hi, p.spot); }
     const padv = (hi-lo)*0.05, yMin = lo - padv, yMax = hi + padv;
     const Y = v => Tm + (yMax-v)/(yMax-yMin)*ih;
-    const col = {maxprofit:'var(--good)', be:'var(--ink)', maxloss:'var(--bad)'};
+    const col = {maxprofit:'var(--good)', be:'var(--ink)', maxloss:'var(--bad)', nowbe:'var(--amber)'};
     const tk = niceTicks(yMin, yMax, small ? 5 : 7);
     let s = '<svg viewBox="0 0 '+W+' '+H+'" id="klSvg" role="img" aria-label="標的日K線與策略關鍵價位">';
     tk.vals.forEach(v => { s += '<line x1="'+Lm+'" x2="'+(Lm+iw)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--line-2)" stroke-width="1"/>'+
@@ -1442,11 +1447,12 @@ const VTS = (function(){
     /* level lines + de-overlapped labels */
     const labs = lvItems.map(i => ({y:Y(i.price), price:i.price, kind:i.kind, text:i.label+' '+i.sign+i.price.toFixed(2).replace(/\.00$/,'')}));
     if (near(p.spot)) labs.push({y:Y(p.spot), price:p.spot, kind:'spot', text:'現價 '+p.spot});
+    nowBE.forEach(v => labs.push({y:Y(v), price:v, kind:'nowbe', text:'今日兩平 '+v.toFixed(2)}));
     labs.sort((a,b) => a.y - b.y);
     labs.forEach((l, i) => { l.ly = (i && l.y < labs[i-1].ly + 13) ? labs[i-1].ly + 13 : l.y; });
     labs.forEach(l => {
       const c = l.kind === 'spot' ? 'var(--ink)' : col[l.kind];
-      s += '<line x1="'+Lm+'" x2="'+bx1.toFixed(1)+'" y1="'+l.y.toFixed(1)+'" y2="'+l.y.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(l.kind==='spot'?1:1.2)+'" stroke-dasharray="'+(l.kind==='spot'?'1 3':'5 4')+'" opacity="'+(l.kind==='spot'?0.8:0.9)+'"/>'+
+      s += '<line x1="'+Lm+'" x2="'+bx1.toFixed(1)+'" y1="'+l.y.toFixed(1)+'" y2="'+l.y.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(l.kind==='spot'?1:1.2)+'" stroke-dasharray="'+(l.kind==='spot'?'1 3':(l.kind==='nowbe'?'6 4':'5 4'))+'" opacity="'+(l.kind==='spot'?0.8:0.9)+'"/>'+
         '<text class="svgt" x="'+(bx1+6)+'" y="'+(l.ly+4).toFixed(1)+'" style="fill:'+c+'" font-weight="'+(l.kind==='spot'?700:600)+'">'+esc(l.text)+'</text>';
     });
     /* time axis */
@@ -1485,6 +1491,7 @@ const VTS = (function(){
       L += '<div>'+(anc ? '色帶從開倉日 '+anc+' 畫到短腳到期日'+(clipped ? '（開倉日早於圖上第一根 K 線，所以從左緣畫起）' : '')+'；' : '色帶是從最後一根 K 線到短腳到期日；')+'最後一根 K 線右側的曲線是到期損益（往右越賺，虛線為損益 0）。'+(active==='IC' ? 'Iron Condor 兩個短腳履約價之間，到期時能賺滿權利金。' : '這是用 Black-Scholes 估計近月到期時的損益（遠月 IV '+(r.est?r.est.ivPct.toFixed(1):'')+'%），不是課程或試算表的數字。')+'</div>';
       if (lvItems.length < lv.items.length) L += '<div class="klstat warn">有 '+(lv.items.length-lvItems.length)+' 條關鍵價位離 K 線價格太遠，沒有畫出。請確認 K 線資料和上方標的是否一致。</div>';
     }
+    if (nowBE.length) L += '<div><span class="sw" style="background:var(--amber)"></span>黃色虛線：今天的損益兩平價（Black-Scholes 模型，持有 '+nowBE.nc.held+' 天、IV '+nowBE.nc.iv.toFixed(1)+'%，取自'+nowBE.nc.src+'），與到期的損益兩平不同。</div>';
     if (nMark) L += '<div>▲ 開倉　✕ 平倉（這個標的已記錄的持倉）</div>';
     if (stretched) L += '<div class="hint">為了看得清楚，右側色帶的寬度有放大，不是等比例的時間長度。</div>';
     if (proj > 0){ L += '<div>短腳到期日約 '+expDate+'（最後一根 K 線 '+last.d+' 加 '+dte+' 天）'+(active==='CAL' && dteFar != null && dteFar > dte ? '；長腳約 '+addDays(last.d, dteFar)+'，在圖右側之外。' : '。')+'</div>'; }
