@@ -256,22 +256,6 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
       <label class="btn primary" for="xlFile" style="display:inline-flex;align-items:center">手動匯入 xlsx</label><input id="xlFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
       <span class="hint" id="xlMsg" role="status">開啟網頁時會自動讀取同一個資料夾的 VTS_Iron_Condor_strategy.xlsx（在 GitHub 上更新它即可）；也可手動匯入。沒有平倉日與平倉價的列會當成「進行中」。</span>
     </div>
-    <details class="adv" id="pfWrap" style="margin-top:0;border-top:0;padding-top:0">
-      <summary>把下方算好的交易存成持倉（新開的單，或補記過去的交易）</summary>
-      <p class="hint" style="margin:8px 0 12px">存的是「3. 交易內容」目前填的履約價與權利金。補記過去的交易時，請先把履約價、權利金填成當時的數字，再選日期與狀態。</p>
-      <div class="g4">
-        <div class="field"><label for="pfOpen">開倉日</label><input id="pfOpen" type="date"></div>
-        <div class="field"><label for="pfExp">短腳到期日</label><input id="pfExp" type="date"><span class="sub">依到期天數自動帶入，可修改</span></div>
-        <div class="field"><label for="pfN">口數</label><input id="pfN" type="number" inputmode="numeric" step="1" min="1" placeholder="口數"><span class="sub">留空用下方的口數</span></div>
-        <div class="field"><label for="pfStatus">狀態</label><select id="pfStatus"><option value="open">持有中</option><option value="closed">已平倉</option></select></div>
-      </div>
-      <div class="g4" id="pfCloseRow" style="margin-top:12px" hidden>
-        <div class="field"><label for="pfCloseDate">平倉日</label><input id="pfCloseDate" type="date"></div>
-        <div class="field"><label for="pfClosePx">平倉價（每股）</label><input id="pfClosePx" type="number" inputmode="decimal" step="any" min="0"><span class="sub">Iron Condor 填買回價，Calendar 填賣出的價差價值</span></div>
-      </div>
-      <div class="g4" style="margin-top:12px"><div class="field" style="grid-column:1/-1"><label for="pfNote">備註（選填）</label><input id="pfNote" type="text" maxlength="200" style="font-family:var(--font-body)"></div></div>
-      <div class="btn-row" style="margin-top:12px"><button class="btn primary" id="pfSave" type="button">儲存持倉</button><span class="hint" id="pfMsg" style="align-self:center" role="status"></span></div>
-    </details>
     <div id="posBody"></div>
   </section>
   <div class="loadnote" id="loadnote" role="status" hidden></div>
@@ -1254,11 +1238,10 @@ const VTS = (function(){
     h += kBlock();
 
     h += '<h3>交易計畫</h3><textarea class="plan" id="plan" readonly aria-label="交易計畫文字"></textarea>'+
-      '<div class="btn-row" style="margin-top:8px"><button class="btn primary" id="btnCopy" type="button">複製交易計畫</button><button class="btn" id="btnToPos" type="button">存成持倉 ↑</button><span class="hint" id="copyMsg" style="align-self:center"></span></div>';
+      '<div class="btn-row" style="margin-top:8px"><button class="btn primary" id="btnCopy" type="button">複製交易計畫</button><span class="hint" id="copyMsg" style="align-self:center"></span></div>';
     host.innerHTML = h;
     $('plan').value = planText(active, p, r);
     $('btnCopy').addEventListener('click', copyPlan);
-    $('btnToPos').addEventListener('click', () => { $('pfWrap').open = true; $('posPanel').scrollIntoView({behavior:'smooth', block:'start'}); });
     if (ch.hover) wireHover(ch.hover);
   }
 
@@ -1562,7 +1545,7 @@ const VTS = (function(){
 
   /* ---------- positions: journal, risk summary, analysis ---------- */
   const POSKEY = 'vts-calc-positions-v1';
-  let closedOpen = false, POS = [], loadedId = null, delArm = null, pfTouched = false;
+  let closedOpen = false, POS = [], loadedId = null, delArm = null;
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + hh(d.getMonth()+1) + '-' + hh(d.getDate()); };
   const lastCloseFor = t => (KROWS && KSYM === t && (($('ticker').value || '').trim().toUpperCase() === t)) ? KROWS[KROWS.length-1].c : null;
   const spotFor = q => (lastCloseFor(q.ticker) != null ? lastCloseFor(q.ticker) : (loadedId === q.id ? numOf('spot') : null));
@@ -1570,41 +1553,8 @@ const VTS = (function(){
   const numField = v => { const t = String(v).trim(); if (t === '') return null; const n = Number(t); return isFinite(n) ? n : NaN; };
   function setMsg(id, t, cls){ const e = $(id); e.textContent = t || ''; e.style.color = cls === 'bad' ? 'var(--bad)' : (cls === 'ok' ? 'var(--good)' : ''); }
   function persist(){ let okSave = false; try { localStorage.setItem(POSKEY, JSON.stringify({v:1, positions:POS})); okSave = true; } catch(e){}
-    if (!okSave) setMsg('pfMsg', '瀏覽器擋住了儲存，重新整理後資料會消失。', 'bad'); return okSave; }
+    if (!okSave) return okSave; }
   function loadPos(){ try { const t = localStorage.getItem(POSKEY); if (t) POS = VTS.normalizePositions(JSON.parse(t)).list; } catch(e){} }
-
-  function syncPf(){
-    if (!$('pfOpen').value) $('pfOpen').value = todayStr();
-    const dte = numOf('dte');
-    if (!pfTouched) $('pfExp').value = (dte != null && dte > 0) ? addDays($('pfOpen').value, Math.round(dte)) : '';
-    const c = lastCtx && lastCtx.r && lastCtx.r.ready ? lastCtx.r.contracts : null;
-    $('pfN').placeholder = c != null ? '預設 ' + c + ' 口' : '口數';
-  }
-  function saveFromTicket(){
-    const ctx = lastCtx;
-    if (!ctx || !ctx.r.ready){ setMsg('pfMsg', '下方「3. 交易內容」還沒填完整，先算出開倉計畫再儲存。', 'bad'); return; }
-    const {active, p, r} = ctx, isIC = active === 'IC';
-    const openDate = $('pfOpen').value || todayStr(), expiry = $('pfExp').value;
-    if (!expiry){ setMsg('pfMsg', '請填短腳到期日。', 'bad'); return; }
-    if (expiry <= openDate){ setMsg('pfMsg', '到期日要晚於開倉日。', 'bad'); return; }
-    const nIn = numField($('pfN').value), contracts = nIn === null ? r.contracts : nIn;
-    if (!(Number.isInteger(contracts) && contracts >= 1)){ setMsg('pfMsg', '口數要是 1 以上的整數（下方算出來是 0 口時，請在這裡填口數）。', 'bad'); return; }
-    const closed = $('pfStatus').value === 'closed';
-    const q = {id:'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), type:isIC ? 'IC' : 'CAL',
-      ticker:($('ticker').value || '').trim().toUpperCase() || '—', openDate, expiry, contracts, spotOpen:p.spot, nlv:p.nlv,
-      tpPrem:r.gainPrem, slPrem:r.lossPrem, feeLeg:numOf('fee') ?? 0.65, note:$('pfNote').value.trim(), status:closed ? 'closed' : 'open', mark:null, markSpot:null, iv:null};
-    if (isIC){ q.lp = p.lp; q.sp = p.sp; q.sc = p.sc; q.lc = p.lc; q.credit = p.credit; }
-    else { q.K = p.kstrike; q.debit = p.debit; const far = numOf('dtefar'), dte = numOf('dte'); q.farExpiry = (far != null && dte != null && far > dte) ? addDays(openDate, Math.round(far)) : null; }
-    if (closed){ q.closeDate = $('pfCloseDate').value; q.closePx = numField($('pfClosePx').value);
-      if (!q.closeDate || q.closePx === null || isNaN(q.closePx) || q.closePx < 0){ setMsg('pfMsg', '已平倉的交易要填平倉日和平倉價。', 'bad'); return; }
-      if (q.closeDate < openDate){ setMsg('pfMsg', '平倉日不能早於開倉日。', 'bad'); return; } }
-    const nz = VTS.normalizePositions([q]);
-    if (nz.errors.length){ setMsg('pfMsg', nz.errors[0], 'bad'); return; }
-    POS.push(nz.list[0]);
-    pfTouched = false; $('pfNote').value = ''; $('pfN').value = '';
-    const okSave = persist(); if (okSave) setMsg('pfMsg', '已儲存。重新整理網頁後還會在。', 'ok');
-    renderK();
-  }
 
   function riskSummary(open){
     const maxTrades = numOf('maxTrades') ?? 3, nlv = numOf('nlv') ?? ((open.find(q => q.nlv) || {}).nlv || null);
@@ -1719,10 +1669,10 @@ const VTS = (function(){
     const open = POS.filter(q => q.status === 'open').sort((a,b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : 0);
     const closed = POS.filter(q => q.status === 'closed').sort((a,b) => a.closeDate < b.closeDate ? 1 : a.closeDate > b.closeDate ? -1 : 0);
     let h = '<h3 style="margin-top:6px">進行中的持倉</h3>';
-    if (!open.length) h += '<p class="empty" style="padding:14px 8px">還沒有進行中的持倉。可以按上方「匯入 VTS_Iron_Condor_strategy.xlsx」，或算好交易後用「儲存持倉」存起來，重新整理網頁也還在。</p>';
+    if (!open.length) h += '<p class="empty" style="padding:14px 8px">還沒有進行中的持倉。可以按上方「匯入 VTS_Iron_Condor_strategy.xlsx」；更新 repo 內的 Excel 後重新整理即可。</p>';
     else h += riskSummary(open) + '<div class="pgrid">' + open.map(openCard).join('') + '</div>';
     h += '<details class="adv" id="closedDet"' + (closedOpen ? ' open' : '') + '><summary>已平倉的回顧（' + closed.length + ' 筆）</summary>';
-    h += closed.length ? closedBlock(closed, W) : '<p class="empty" style="padding:14px 8px">還沒有已平倉的交易。平倉後會在這裡統計勝率、獲利因子與最大回撤；也可以用「儲存持倉」補記過去已平倉的交易。</p>';
+    h += closed.length ? closedBlock(closed, W) : '<p class="empty" style="padding:14px 8px">還沒有已平倉的交易。平倉後會在這裡統計勝率、獲利因子與最大回撤。</p>';
     h += '</details>';
     host.innerHTML = h;
     const cd = $('closedDet'); if (cd) cd.addEventListener('toggle', () => { closedOpen = cd.open; });
@@ -1752,10 +1702,6 @@ const VTS = (function(){
     if (v !== null && (isNaN(v) || v < 0)){ renderPositions(); return; }
     q[f] = v; persist(); renderPositions();
   });
-  $('pfSave').addEventListener('click', saveFromTicket);
-  $('pfStatus').addEventListener('change', () => { const c = $('pfStatus').value === 'closed'; $('pfCloseRow').hidden = !c; if (c && !$('pfCloseDate').value) $('pfCloseDate').value = todayStr(); });
-  $('pfExp').addEventListener('input', () => { pfTouched = true; });
-  $('pfOpen').addEventListener('change', () => { syncPf(); });
   function loadPosition(q){
     const open = POS.filter(x => x.status === 'open' && x.id !== q.id), tm = times(q), isIC = q.type === 'IC';
     $('ticker').value = q.ticker;
@@ -1801,7 +1747,7 @@ const VTS = (function(){
     } catch(e){ msg('讀取失敗：' + String((e && e.message) || '檔案格式不符').replace(/[。.]$/, '') + '。', 'bad'); }
   }
   $('xlFile').addEventListener('change', ev => { const f = ev.target.files && ev.target.files[0]; if (f) importXlsx(f); ev.target.value = ''; });
-  loadPos(); $('pfWrap').open = false;
+  loadPos();
   async function loadDefaultXlsx(){
     try { const res = await fetch('VTS_Iron_Condor_strategy.xlsx', {cache:'no-cache'}); if (!res.ok) return; await importXlsx(await res.blob(), true); } catch(e){}
   }
@@ -1828,7 +1774,6 @@ const VTS = (function(){
     const r = active === 'IC' ? VTS.sizeIC(p) : VTS.sizeCal(p);
     renderResults(active, p, r, env, mode);
     lastCtx = {active, p, r};
-    syncPf();
     renderK();
     $('exnote').hidden = !isExample;
     syncPresets();
