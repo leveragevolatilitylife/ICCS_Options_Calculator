@@ -1519,32 +1519,38 @@ const VTS = (function(){
   const CBOE = 'https://cdn.cboe.com/api/global/delayed_quotes/';
   function pctRank(arr, v){ const a = arr.filter(x => isFinite(x)); if (a.length < 120) return null; return a.filter(x => x < v).length / a.length * 100; }
   function parseOcc(o){ const m = /^([A-Z0-9]+?)(\d{6})([CP])(\d{8})$/.exec(o || ''); return m ? {date:'20' + m[2].slice(0,2) + '-' + m[2].slice(2,4) + '-' + m[2].slice(4,6), type:m[3], K:Number(m[4])/1000} : null; }
+  let VOLJ = null;
+  async function volFile(){
+    if (VOLJ !== null) return VOLJ || null;
+    try { const j = await getJSON('data/vol.json?t=' + Date.now()); VOLJ = (j && j.updated) ? j : false; } catch(e){ VOLJ = false; }
+    return VOLJ || null;
+  }
   async function volVix(){
-    try {
-      const [q, h] = await Promise.all([getJSON(CBOE + 'quotes/_VIX.json'), getJSON(CBOE + 'charts/historical/_VIX.json').catch(() => null)]);
-      const px = Number(q && q.data && q.data.current_price); if (!(px > 0)) throw new Error('Cboe 回傳格式不符');
-      let hist = []; if (h && h.data){ const arr = Array.isArray(h.data) ? h.data : (h.data.data || []); hist = arr.map(r => Number(r.close != null ? r.close : r.Close)).filter(x => x > 0).slice(-252); }
-      return {v:px, t:(q.data.last_trade_time || '').replace('T',' ').slice(0,16), pct:pctRank(hist, px), n:hist.length, src:'Cboe 延遲報價'};
-    } catch(e1){
-      const key = ($('klKey').value || '').trim(); if (!key) throw e1;
-      const j = await getJSON('https://api.twelvedata.com/time_series?symbol=VIX&interval=1day&outputsize=260&order=asc&apikey=' + encodeURIComponent(key));
-      const out = VTS.parseTwelve(j, 5); if (out.error) throw new Error(out.error);
-      const cl = out.rows.map(r => r.c), last = out.rows[out.rows.length-1];
-      return {v:last.c, t:last.d, pct:pctRank(cl.slice(-252), last.c), n:Math.min(252, cl.length), src:'Twelve Data'};
-    }
+    const f = await volFile();
+    if (f && f.vix){ const v = f.vix; return {v:v.v, t:v.t.replace('T',' ') + '（檔案更新 ' + f.updated.replace('T',' ').slice(0,16) + ' UTC）', pct:v.pct, n:v.n, src:'Cboe 延遲報價（GitHub 排程）'}; }
+    const [q, h] = await Promise.all([getJSON(CBOE + 'quotes/_VIX.json'), getJSON(CBOE + 'charts/historical/_VIX.json').catch(() => null)]);
+    const px = Number(q && q.data && q.data.current_price); if (!(px > 0)) throw new Error('Cboe 回傳格式不符');
+    let hist = []; if (h && h.data){ const arr = Array.isArray(h.data) ? h.data : (h.data.data || []); hist = arr.map(r => Number(r.close != null ? r.close : r.Close)).filter(x => x > 0).slice(-252); }
+    return {v:px, t:(q.data.last_trade_time || '').replace('T',' ').slice(0,16), pct:pctRank(hist, px), n:hist.length, src:'Cboe 延遲報價'};
   }
   async function volFar(sym){
-    const j = await getJSON(CBOE + 'options/' + encodeURIComponent(sym) + '.json');
-    const d = j && j.data, opts = d && d.options; if (!Array.isArray(opts) || !opts.length) throw new Error('沒有選擇權資料');
-    const spot = Number(d.current_price) || numOf('spot');
+    const f = await volFile(); let rows, src;
+    if (f && f.chains && f.chains[sym]){ rows = f.chains[sym].puts.map(r => ({date:r[0], K:r[1], iv:r[2]/100})); rows.spot = f.chains[sym].spot; src = 'Cboe 延遲選擇權鏈（GitHub 排程）'; }
+    else if (f && f.chains && !f.chains[sym]) throw new Error('排程資料沒有 ' + sym + '；請把它加到 scripts/fetch_vol.py 的 TICKERS');
+    else {
+      const j = await getJSON(CBOE + 'options/' + encodeURIComponent(sym) + '.json');
+      const d = j && j.data, opts = d && d.options; if (!Array.isArray(opts) || !opts.length) throw new Error('沒有選擇權資料');
+      rows = opts.map(o => { const p = parseOcc(o.option); return p ? Object.assign(p, {iv:Number(o.iv)}) : null; }).filter(r => r && r.type === 'P' && r.iv > 0);
+      rows.spot = Number(d.current_price); src = 'Cboe 延遲選擇權鏈';
+    }
+    const spot = rows.spot || numOf('spot');
     const dte = numOf('dte') ?? 0, far = numOf('dtefar'), target = addDays(todayStr(), Math.round(far != null && far > dte ? far : dte + 30));
     const K0 = (getMode() === 'ic' || !numOf('kstrike')) ? spot : numOf('kstrike');
-    const rows = opts.map(o => { const p = parseOcc(o.option); return p ? Object.assign(p, {iv:Number(o.iv)}) : null; }).filter(r => r && r.type === 'P' && r.iv > 0);
     if (!rows.length) throw new Error('找不到可用的 Put IV');
     const dates = Array.from(new Set(rows.map(r => r.date)));
     const dd = x => Math.abs(VTS.dayDiff(target, x)); const date = dates.sort((a,b) => dd(a) - dd(b))[0];
     const cand = rows.filter(r => r.date === date).sort((a,b) => Math.abs(a.K - K0) - Math.abs(b.K - K0))[0];
-    return {iv:cand.iv*100, date, K:cand.K, src:'Cboe 延遲選擇權鏈'};
+    return {iv:cand.iv*100, date, K:cand.K, src};
   }
   function renderLive(){
     const b = $('liveBox'), L = LIVE; if (!b) return;
