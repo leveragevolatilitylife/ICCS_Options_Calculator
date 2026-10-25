@@ -251,10 +251,10 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
 
 
   <section class="panel" id="posPanel">
-    <h2>持倉紀錄 <span class="hint">點選進行中的持倉，會把它的內容帶入下方 1～5 的方塊</span></h2>
+    <h2>我的持倉紀錄 <span class="hint">點選進行中的持倉，會把它的內容帶入下方 1～5 的方塊</span></h2>
     <div class="xlbar">
-      <label class="btn primary" for="xlFile" style="display:inline-flex;align-items:center">匯入 VTS_Iron_Condor_strategy.xlsx</label><input id="xlFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-      <span class="hint" id="xlMsg" role="status">檔案只在你的瀏覽器裡讀取，不會上傳。沒有平倉日與平倉價的列會當成「進行中」。</span>
+      <label class="btn primary" for="xlFile" style="display:inline-flex;align-items:center">手動匯入 xlsx</label><input id="xlFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      <span class="hint" id="xlMsg" role="status">開啟網頁時會自動讀取同一個資料夾的 VTS_Iron_Condor_strategy.xlsx（在 GitHub 上更新它即可）；也可手動匯入。沒有平倉日與平倉價的列會當成「進行中」。</span>
     </div>
     <details class="adv" id="pfWrap" style="margin-top:0;border-top:0;padding-top:0">
       <summary>把下方算好的交易存成持倉（新開的單，或補記過去的交易）</summary>
@@ -311,7 +311,7 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
     <div class="g4">
       <div class="field"><label for="nlv">總淨清算價值（美元）</label><input id="nlv" type="number" inputmode="decimal" step="any" min="0"></div>
       <div class="field"><label for="ticker">標的代號</label><input id="ticker" type="text" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
-      <div class="field"><label for="spot">現價</label><input id="spot" type="number" inputmode="decimal" step="any" min="0"></div>
+      <div class="field"><label for="spot">現價（即時，自動更新）</label><input id="spot" type="number" inputmode="decimal" step="any" min="0" readonly style="opacity:.85;cursor:default"><span class="sub" id="spotSub">依標的代號自動抓取最新價</span></div>
       <div class="field"><label for="dte">到期天數（短腳）</label><input id="dte" type="number" inputmode="numeric" step="1" min="0"><span class="sub">含週末與假日的日曆天數</span></div>
     </div>
   </section>
@@ -397,7 +397,6 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
       <div class="btn-row" style="margin-top:8px">
         <button class="btn primary" id="klLoad" type="button">載入資料</button>
         <label class="btn" for="klFile" style="display:inline-flex;align-items:center">上傳 CSV</label><input id="klFile" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
-        <button class="btn" id="klSpot" type="button" disabled>用最後收盤價填入現價</button>
         <button class="btn" id="klClear" type="button">清除資料</button>
       </div>
     </details>
@@ -1343,19 +1342,19 @@ const VTS = (function(){
       if (Array.isArray(a) && a.length >= 5) return a.map(x => ({d:x[0], o:x[1], h:x[2], l:x[3], c:x[4]}));
     } catch(e){} return null; }
   function describeK(extra){
-    if (!KROWS){ setStat(''); $('klSpot').disabled = true; return; }
+    if (!KROWS){ setStat(''); return; }
     const a = KROWS[0].d, b = KROWS[KROWS.length-1].d;
     const age = Math.round((Date.now() - Date.parse(b + 'T00:00:00Z'))/86400000);
     let msg = '已載入 ' + KROWS.length + ' 根日 K（' + a + ' ～ ' + b + '），最後收盤 ' + KROWS[KROWS.length-1].c + (extra || '') + '。';
     let cls = '';
     if (age > 7){ msg += ' 最後一根距今 ' + age + ' 天，到期區間是從最後一根 K 線往後推算，可能和實際日期有落差。'; cls = 'warn'; }
-    setStat(msg, cls); $('klSpot').disabled = false;
+    setStat(msg, cls);
   }
   function ingest(text){
     const res = VTS.parseOHLC(text);
     if (res.error){ setStat(res.error, 'bad'); return; }
-    KROWS = res.rows; KINFO = '資料來源：貼上或上傳的 CSV'; saveK(); describeK(res.skipped ? '，略過 ' + res.skipped + ' 列無法辨識的資料' : '');
-    $('klData').open = false; renderK();
+    KROWS = res.rows; KSYM = ($('ticker').value || '').trim().toUpperCase(); KINFO = '資料來源：貼上或上傳的 CSV'; saveK(); describeK(res.skipped ? '，略過 ' + res.skipped + ' 列無法辨識的資料' : '');
+    $('klData').open = false; update();
   }
 
   function renderK(){
@@ -1488,7 +1487,6 @@ const VTS = (function(){
   $('klFile').addEventListener('change', ev => { const f = ev.target.files && ev.target.files[0]; if (!f) return;
     const fr = new FileReader(); fr.onload = () => { $('klText').value = String(fr.result).slice(0, 2000000); ingest($('klText').value); }; fr.readAsText(f); ev.target.value = ''; });
   $('klClear').addEventListener('click', () => { KROWS = null; KINFO = ''; $('klText').value = ''; saveK(); describeK(); $('klData').open = true; renderK(); });
-  $('klSpot').addEventListener('click', () => { if (!KROWS) return; $('spot').value = String(KROWS[KROWS.length-1].c); onUserEdit({target:{id:'spot'}}); });
   let rzT = null; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(renderK, 120); });
   const PKEY = 'vts-calc-prov-v1', TKEY = 'vts-calc-tdkey-v1';
   const hh = n => String(n).padStart(2,'0');
@@ -1541,7 +1539,7 @@ const VTS = (function(){
       const out = tw ? await loadTwelve(sym, incremental) : await loadYahoo(sym);
       KROWS = out.rows; KSYM = sym; saveK();
       KINFO = '資料來源：' + out.label + '，更新於 ' + stamp();
-      describeK('，代號 ' + out.symbol); $('klData').open = false; renderK();
+      describeK('，代號 ' + out.symbol); $('klData').open = false; update();
     } catch(e){
       let why = (e && e.name === 'AbortError') ? '逾時' : ((e && e.message) || '連線失敗');
       if (e && (e.code === 401 || e.code === 403 || e.http === 401 || e.http === 403)) why += '（金鑰可能不對，或這個代號不在免費方案內）';
@@ -1566,8 +1564,8 @@ const VTS = (function(){
   const POSKEY = 'vts-calc-positions-v1';
   let closedOpen = false, POS = [], loadedId = null, delArm = null, pfTouched = false;
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + hh(d.getMonth()+1) + '-' + hh(d.getDate()); };
-  const lastCloseFor = t => (KROWS && (($('ticker').value || '').trim().toUpperCase() === t)) ? KROWS[KROWS.length-1].c : null;
-  const spotFor = q => q.markSpot != null ? q.markSpot : (lastCloseFor(q.ticker) != null ? lastCloseFor(q.ticker) : (loadedId === q.id ? numOf('spot') : null));
+  const lastCloseFor = t => (KROWS && KSYM === t && (($('ticker').value || '').trim().toUpperCase() === t)) ? KROWS[KROWS.length-1].c : null;
+  const spotFor = q => (lastCloseFor(q.ticker) != null ? lastCloseFor(q.ticker) : (loadedId === q.id ? numOf('spot') : null));
   const times = q => { const dS = VTS.dayDiff(todayStr(), q.expiry); return {dShort:dS, dFar:q.farExpiry ? VTS.dayDiff(todayStr(), q.farExpiry) : dS + 30}; };
   const numField = v => { const t = String(v).trim(); if (t === '') return null; const n = Number(t); return isFinite(n) ? n : NaN; };
   function setMsg(id, t, cls){ const e = $(id); e.textContent = t || ''; e.style.color = cls === 'bad' ? 'var(--bad)' : (cls === 'ok' ? 'var(--good)' : ''); }
@@ -1662,7 +1660,7 @@ const VTS = (function(){
     if (!isIC && tm.dShort <= 0) b += '<p class="hint">Calendar 不持有跨越近月到期日，請確認是否該平倉。</p>';
     if (q.note) b += '<p class="hint">備註：' + esc(q.note) + '</p>';
     b += '</div>';
-    let c = '<div class="pc"><div class="g2c"><div class="field"><label>標的現價</label><input type="number" inputmode="decimal" step="any" min="0" data-f="markSpot" value="' + (q.markSpot != null ? q.markSpot : '') + '" placeholder="' + (lastCloseFor(q.ticker) != null ? lastCloseFor(q.ticker) : '填入現價') + '"></div>' +
+    let c = '<div class="pc"><div class="g2c"><div class="field"><label>標的現價（自動）</label><div class="num" style="padding:9px 0">' + (spot != null ? spot : '—') + '</div></div>' +
       '<div class="field"><label>' + (isIC ? '目前買回價（每股）' : '目前價差價值（每股）') + '</label><input type="number" inputmode="decimal" step="any" min="0" data-f="mark" value="' + (mark != null ? mark : '') + '" placeholder="券商報價"></div></div>';
     if (mark != null){
       const pl = VTS.unrealized(q, mark), frac = Math.max(0, Math.min(1, isIC ? (q.slPrem - mark)/(q.slPrem - q.tpPrem) : (mark - q.slPrem)/(q.tpPrem - q.slPrem)));
@@ -1674,7 +1672,7 @@ const VTS = (function(){
       if (es){
         const k = VTS.posStatus(q, es.mark), where = k === 'tp' ? '，估計已達止盈價' : (k === 'sl' ? '，估計已達止損價' : '，仍在止盈與止損之間');
         c += '<div class="estbox"><b>模型估計（Black-Scholes，現價 ' + es.spot + '、IV ' + es.ivPct.toFixed(1) + '%）</b><br>' + (isIC ? '買回價' : '價差價值') + '約 ' + prem(es.mark) + '，損益約 <b class="' + (es.pl >= 0 ? 'pos' : 'neg') + '">' + sgn(Math.round(es.pl)) + '</b>（未扣手續費）' + where + '。這只是估計，請以券商報價為準，填入「' + (isIC ? '目前買回價' : '目前價差價值') + '」就會改用真實數字。</div>';
-      } else c += '<p class="hint">填入標的現價（或載入 K 線資料）可看模型估計；填入目前報價就能看到真實損益與離止盈、止損還有多遠。</p>';
+      } else c += '<p class="hint">帶入這筆持倉並取得即時行情後，這裡會顯示模型估計；填入目前報價就能看到真實損益與離止盈、止損還有多遠。</p>';
     }
     c += '</div>';
     return '<div class="pcard' + (loadedId === q.id ? ' lded' : '') + '" data-id="' + q.id + '">' + a + b + c + '</div>';
@@ -1773,7 +1771,7 @@ const VTS = (function(){
     writeState(Object.assign(cur, isIC ? {kstrike:'', debit:'', dtefar:'', ivest:''} : {lp:'', sp:'', sc:'', lc:'', credit:'', dput:'', dcall:''}, ch));
     isExample = false; loadedId = q.status === 'open' ? q.id : null; setAnchor({ticker:q.ticker, date:q.openDate}); save(); update();
     const n = $('loadnote'), notes = [];
-    if (live == null && q.spotOpen != null) notes.push('現價先用開倉價 ' + q.spotOpen + '，請更新成最新價（第 4 區可抓即時行情後按「用最後收盤價填入現價」）');
+    if (live == null && q.spotOpen != null) notes.push('現價先用開倉價 ' + q.spotOpen + '，請更新成最新價（正在自動抓取最新價，稍後會更新）');
     if (q.status === 'closed') notes.push('這是已平倉的交易，帶入的是開倉當時的內容；到期天數已用今天重新計算');
     if (tm.dShort < 0) notes.push('已過到期日');
     n.className = 'loadnote' + (notes.length ? ' warn' : '');
@@ -1781,8 +1779,9 @@ const VTS = (function(){
     n.hidden = false;
     $('exnote').hidden = true;
     const top = $('loadnote'); top.scrollIntoView({behavior:'smooth', block:'start'});
+    if (q.ticker !== KSYM) fetchLive(false);
   }
-  async function importXlsx(file){
+  async function importXlsx(file, isDefault){
     const msg = (t, c) => { const e = $('xlMsg'); e.textContent = t; e.style.color = c === 'bad' ? 'var(--bad)' : (c === 'ok' ? 'var(--good)' : ''); };
     if (file.size > 15*1024*1024){ msg('檔案太大，不像是這份試算表。', 'bad'); return; }
     msg('讀取中…');
@@ -1791,20 +1790,30 @@ const VTS = (function(){
       const res = VTS.positionsFromSheets(sheets, {gainIC:numOf('gainIC'), lossIC:numOf('lossIC'), gainCal:numOf('gainCal'), lossCal:numOf('lossCal'), fee:numOf('fee')});
       const nz = VTS.normalizePositions(res.list);
       if (!nz.list.length){ msg('沒有讀到交易列。這個功能對應課程試算表的版面（標題在第 7 列，交易從第 8、9 列開始，B 欄是 Iron Condor 或 Calendar）。' + (nz.errors[0] ? ' ' + nz.errors[0] : ''), 'bad'); return; }
+      if (isDefault) POS = POS.filter(x => x.src !== 'excel' || nz.list.some(q => q.id === x.id));
       let added = 0, updated = 0;
       nz.list.forEach(q => { const i = POS.findIndex(x => x.id === q.id);
         if (i >= 0){ const o = POS[i]; ['mark','markSpot','iv'].forEach(k => { q[k] = o[k]; }); if (o.note && o.src !== 'excel') q.note = o.note; POS[i] = q; updated++; } else { POS.push(q); added++; } });
       persist();
       const nOpen = nz.list.filter(q => q.status === 'open').length;
-      msg('已匯入：新增 ' + added + ' 筆、更新 ' + updated + ' 筆（其中進行中 ' + nOpen + ' 筆）。' + (res.skipped.length ? '略過 ' + res.skipped.length + ' 筆：' + res.skipped[0] + '。' : '') + (nz.errors.length ? ' 另有 ' + nz.errors.length + ' 筆格式不合：' + nz.errors[0] : ''), 'ok');
+      msg((isDefault ? '已自動讀取 repo 內的 VTS_Iron_Condor_strategy.xlsx：' : '已匯入：') + '新增 ' + added + ' 筆、更新 ' + updated + ' 筆（其中進行中 ' + nOpen + ' 筆）。' + (res.skipped.length ? '略過 ' + res.skipped.length + ' 筆：' + res.skipped[0] + '。' : '') + (nz.errors.length ? ' 另有 ' + nz.errors.length + ' 筆格式不合：' + nz.errors[0] : ''), 'ok');
       renderK();
     } catch(e){ msg('讀取失敗：' + String((e && e.message) || '檔案格式不符').replace(/[。.]$/, '') + '。', 'bad'); }
   }
   $('xlFile').addEventListener('change', ev => { const f = ev.target.files && ev.target.files[0]; if (f) importXlsx(f); ev.target.value = ''; });
   loadPos(); $('pfWrap').open = false;
+  async function loadDefaultXlsx(){
+    try { const res = await fetch('VTS_Iron_Condor_strategy.xlsx', {cache:'no-cache'}); if (!res.ok) return; await importXlsx(await res.blob(), true); } catch(e){}
+  }
 
   /* ---------- main update ---------- */
+  function syncSpot(){
+    const t = ($('ticker').value || '').trim().toUpperCase(), sub = $('spotSub');
+    if (KROWS && t && KSYM === t){ const l = KROWS[KROWS.length-1]; $('spot').value = String(l.c); sub.textContent = '最新價 ' + l.c + '（' + l.d + ' 收盤／即時）'; }
+    else { sub.textContent = t ? '尚未取得 ' + t + ' 的行情；請到第 4 區填入金鑰' : '先填標的代號'; }
+  }
   function update(){
+    syncSpot();
     const mode = getMode();
     const env = VTS.envVerdict({baro:numOf('baro'), ivp:numOf('ivp'), vix:numOf('vix'), thr:numOf('thr'), margin:numOf('near'), vixRef:numOf('vixref')});
     renderGauges(env);
@@ -1829,6 +1838,7 @@ const VTS = (function(){
 
   /* ---------- wiring ---------- */
   IDS.forEach(id => $(id).addEventListener('input', onUserEdit));
+  let tkT = null; $('ticker').addEventListener('input', () => { if (($('ticker').value || '').trim().toUpperCase() !== KSYM){ $('spot').value = ''; update(); } clearTimeout(tkT); tkT = setTimeout(() => { const t = ($('ticker').value || '').trim().toUpperCase(); if (t && t !== KSYM) fetchLive(false); }, 900); });
   document.querySelectorAll('input[name="mode"]').forEach(el => el.addEventListener('change', onUserEdit));
   ['25','30','33'].forEach(v => $('tp'+v).addEventListener('change', () => { $('thr').value = v; onUserEdit(); }));
   $('btnExIC').addEventListener('click', () => { setAnchor(null); writeState(EX_IC); isExample = true; save(); update(); });
@@ -1839,5 +1849,6 @@ const VTS = (function(){
   if (saved){ writeState(saved); }
   else { writeState(EX_IC); isExample = true; }
   update();
+  loadDefaultXlsx().then(() => fetchLive(false));
 })();
 </script>
