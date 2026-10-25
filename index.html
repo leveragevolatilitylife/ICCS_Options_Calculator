@@ -161,6 +161,9 @@ textarea.plan{width:100%;min-height:150px;border:1px solid var(--border);border-
 .foot{font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border-soft);padding-top:18px;margin-top:6px}
 .foot b{color:var(--text-secondary)}
 .foot .disc{font-family:var(--font-num);color:var(--text-tertiary)}
+.livebox{margin-top:16px;border:1px dashed var(--border);border-radius:4px;padding:10px 12px;font-size:13px;color:var(--text-secondary);line-height:1.7}
+.livebox b{font-family:var(--font-num);color:var(--text-primary);font-weight:600}
+.livebox .lh{font-size:12px;color:var(--ink-3)}
 .pgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:6px}
 .pcard{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:18px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.1fr);gap:16px 32px;align-items:start;min-width:0}
 .pc{display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -270,6 +273,7 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
           <div class="field"><label for="ivp">IV Percentile（%）</label><input id="ivp" type="number" inputmode="decimal" step="any" min="0" max="100"><span class="sub">券商選擇權統計頁</span></div>
           <div class="field"><label for="vix">VIX 指數</label><input id="vix" type="number" inputmode="decimal" step="any" min="0"><span class="sub">僅供參考，不影響判定</span></div>
         </div>
+        <div class="livebox" id="liveBox" role="status"></div>
         <div class="gauges" id="gauges" style="margin-top:18px"></div>
         <div class="gscale"><span>0%</span><span>百分位</span><span>100%</span></div>
         <details class="adv">
@@ -327,7 +331,7 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
         <div class="field"><label for="kstrike">履約價（Put，長短腳相同）</label><input id="kstrike" type="number" inputmode="decimal" step="any"></div>
         <div class="field"><label for="debit">支付權利金（每股）</label><input id="debit" type="number" inputmode="decimal" step="any" min="0"></div>
         <div class="field"><label for="dtefar">長腳到期天數（選填）</label><input id="dtefar" type="number" inputmode="numeric" step="1" min="0"><span class="sub">應比短腳多約一個月</span></div>
-        <div class="field"><label for="ivest">遠月隱含波動率 IV（%，選填）</label><input id="ivest" type="number" inputmode="decimal" step="any" min="0"><span class="sub">用來估計最大獲利；空白時用 VIX</span></div>
+        <div class="field"><label for="ivest">遠月隱含波動率 IV（%，選填）</label><input id="ivest" type="number" inputmode="decimal" step="any" min="0"><span class="sub">用來估計最大獲利；空白時用 VIX</span><span class="sub" id="ivLive"></span></div>
       </div>
     </div>
 
@@ -1510,10 +1514,65 @@ const VTS = (function(){
     if (out.error){ const e = new Error(out.error); e.soft = true; throw e; }
     return {rows:out.rows, label:'Yahoo Finance（約延遲 15 分鐘）', symbol:(out.meta && out.meta.symbol) || sym};
   }
-  let liveBusy = false;
+  /* ---------- live volatility numbers (display only; manual fields stay as the open-time values) ---------- */
+  let LIVE = null, volBusy = false;
+  const CBOE = 'https://cdn.cboe.com/api/global/delayed_quotes/';
+  function pctRank(arr, v){ const a = arr.filter(x => isFinite(x)); if (a.length < 120) return null; return a.filter(x => x < v).length / a.length * 100; }
+  function parseOcc(o){ const m = /^([A-Z0-9]+?)(\d{6})([CP])(\d{8})$/.exec(o || ''); return m ? {date:'20' + m[2].slice(0,2) + '-' + m[2].slice(2,4) + '-' + m[2].slice(4,6), type:m[3], K:Number(m[4])/1000} : null; }
+  async function volVix(){
+    try {
+      const [q, h] = await Promise.all([getJSON(CBOE + 'quotes/_VIX.json'), getJSON(CBOE + 'charts/historical/_VIX.json').catch(() => null)]);
+      const px = Number(q && q.data && q.data.current_price); if (!(px > 0)) throw new Error('Cboe 回傳格式不符');
+      let hist = []; if (h && h.data){ const arr = Array.isArray(h.data) ? h.data : (h.data.data || []); hist = arr.map(r => Number(r.close != null ? r.close : r.Close)).filter(x => x > 0).slice(-252); }
+      return {v:px, t:(q.data.last_trade_time || '').replace('T',' ').slice(0,16), pct:pctRank(hist, px), n:hist.length, src:'Cboe 延遲報價'};
+    } catch(e1){
+      const key = ($('klKey').value || '').trim(); if (!key) throw e1;
+      const j = await getJSON('https://api.twelvedata.com/time_series?symbol=VIX&interval=1day&outputsize=260&order=asc&apikey=' + encodeURIComponent(key));
+      const out = VTS.parseTwelve(j, 5); if (out.error) throw new Error(out.error);
+      const cl = out.rows.map(r => r.c), last = out.rows[out.rows.length-1];
+      return {v:last.c, t:last.d, pct:pctRank(cl.slice(-252), last.c), n:Math.min(252, cl.length), src:'Twelve Data'};
+    }
+  }
+  async function volFar(sym){
+    const j = await getJSON(CBOE + 'options/' + encodeURIComponent(sym) + '.json');
+    const d = j && j.data, opts = d && d.options; if (!Array.isArray(opts) || !opts.length) throw new Error('沒有選擇權資料');
+    const spot = Number(d.current_price) || numOf('spot');
+    const dte = numOf('dte') ?? 0, far = numOf('dtefar'), target = addDays(todayStr(), Math.round(far != null && far > dte ? far : dte + 30));
+    const K0 = (getMode() === 'ic' || !numOf('kstrike')) ? spot : numOf('kstrike');
+    const rows = opts.map(o => { const p = parseOcc(o.option); return p ? Object.assign(p, {iv:Number(o.iv)}) : null; }).filter(r => r && r.type === 'P' && r.iv > 0);
+    if (!rows.length) throw new Error('找不到可用的 Put IV');
+    const dates = Array.from(new Set(rows.map(r => r.date)));
+    const dd = x => Math.abs(VTS.dayDiff(target, x)); const date = dates.sort((a,b) => dd(a) - dd(b))[0];
+    const cand = rows.filter(r => r.date === date).sort((a,b) => Math.abs(a.K - K0) - Math.abs(b.K - K0))[0];
+    return {iv:cand.iv*100, date, K:cand.K, src:'Cboe 延遲選擇權鏈'};
+  }
+  function renderLive(){
+    const b = $('liveBox'), L = LIVE; if (!b) return;
+    const man = n => { const v = numOf(n); return v != null ? v : null; };
+    if (!L){ b.innerHTML = '<span class="lh">即時行情：尚未取得。上方欄位是你開倉當下的數字，下方的即時數字只供對照，不會改變計算。</span>'; $('ivLive').textContent = ''; return; }
+    const row = (k, v, cmp) => '<div>' + k + ' <b>' + v + '</b>' + (cmp ? ' <span class="lh">' + cmp + '</span>' : '') + '</div>';
+    let h = '<div class="lh">即時行情（只供對照，不改變計算；上方欄位是開倉當下的數字）</div>';
+    if (L.vix) h += row('VIX', L.vix.v.toFixed(2), '（' + L.vix.src + '，' + L.vix.t + (man('vix') != null ? '；開倉時 ' + man('vix') : '') + '）') +
+      (L.vix.pct != null ? row('VIX 一年百分位（近似 IV Percentile）', L.vix.pct.toFixed(0) + '%', '（過去 ' + L.vix.n + ' 日；不是券商的 IV Percentile' + (man('ivp') != null ? '；開倉時 ' + man('ivp') + '%' : '') + '）') : '');
+    else if (L.vixErr) h += '<div class="klstat bad">VIX 抓不到：' + esc(L.vixErr) + '</div>';
+    if (L.far) h += row('遠月 IV（' + L.far.date + ' ' + L.far.K + ' Put）', L.far.iv.toFixed(1) + '%', '（' + L.far.src + (man('ivest') != null ? '；開倉時 ' + man('ivest') + '%' : '') + '）');
+    else if (L.farErr) h += '<div class="klstat bad">遠月 IV 抓不到：' + esc(L.farErr) + '</div>';
+    b.innerHTML = h + '<div class="lh">更新於 ' + L.stamp + '。資料有約 15 分鐘延遲，且為非官方公開介面，可能隨時失效。</div>';
+    $('ivLive').textContent = L.far ? '即時 ' + L.far.iv.toFixed(1) + '%（' + L.far.date + ' ' + L.far.K + ' Put）' : '';
+  }
+  async function fetchVol(){
+    if (volBusy) return; volBusy = true;
+    const sym = ($('ticker').value || '').trim().toUpperCase(), next = {stamp:stamp()};
+    const [a, c] = await Promise.allSettled([volVix(), sym ? volFar(sym) : Promise.reject(new Error('先填標的代號'))]);
+    if (a.status === 'fulfilled') next.vix = a.value; else next.vixErr = (a.reason && a.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(a.reason && a.reason.message || a.reason);
+    if (c.status === 'fulfilled') next.far = c.value; else next.farErr = (c.reason && c.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(c.reason && c.reason.message || c.reason);
+    LIVE = next; volBusy = false; renderLive();
+  }
+  let liveBusy = false, lastVol = 0;
   async function fetchLive(fromTimer){
     const sym = ($('ticker').value || '').trim().toUpperCase();
     if (!sym){ setStat('先在上方「標的代號」欄位填入代號，例如 SPY。', 'bad'); return; }
+    if (!fromTimer || Date.now() - lastVol > 600000){ lastVol = Date.now(); fetchVol(); }
     if (liveBusy) return; liveBusy = true;
     const btn = $('klLive'); btn.disabled = true; btn.textContent = '抓取中…';
     try {
@@ -1759,7 +1818,7 @@ const VTS = (function(){
     else { sub.textContent = t ? '尚未取得 ' + t + ' 的行情；請到第 4 區填入金鑰' : '先填標的代號'; }
   }
   function update(){
-    syncSpot();
+    syncSpot(); renderLive();
     const mode = getMode();
     const env = VTS.envVerdict({baro:numOf('baro'), ivp:numOf('ivp'), vix:numOf('vix'), thr:numOf('thr'), margin:numOf('near'), vixRef:numOf('vixref')});
     renderGauges(env);
