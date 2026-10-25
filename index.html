@@ -1790,7 +1790,7 @@ const VTS = (function(){
       const res = VTS.positionsFromSheets(sheets, {gainIC:numOf('gainIC'), lossIC:numOf('lossIC'), gainCal:numOf('gainCal'), lossCal:numOf('lossCal'), fee:numOf('fee')});
       const nz = VTS.normalizePositions(res.list);
       if (!nz.list.length){ msg('沒有讀到交易列。這個功能對應課程試算表的版面（標題在第 7 列，交易從第 8、9 列開始，B 欄是 Iron Condor 或 Calendar）。' + (nz.errors[0] ? ' ' + nz.errors[0] : ''), 'bad'); return; }
-      if (isDefault) POS = POS.filter(x => x.src !== 'excel' || nz.list.some(q => q.id === x.id));
+      if (isDefault){ POS = POS.filter(x => x.src === 'excel' && nz.list.some(q => q.id === x.id)); if (loadedId && !POS.some(x => x.id === loadedId)) loadedId = null; }
       let added = 0, updated = 0;
       nz.list.forEach(q => { const i = POS.findIndex(x => x.id === q.id);
         if (i >= 0){ const o = POS[i]; ['mark','markSpot','iv'].forEach(k => { q[k] = o[k]; }); if (o.note && o.src !== 'excel') q.note = o.note; POS[i] = q; updated++; } else { POS.push(q); added++; } });
