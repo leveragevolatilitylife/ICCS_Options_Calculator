@@ -4,7 +4,7 @@ Runs on GitHub Actions so the browser never needs cross-site access. Standard li
 import json, os, re, sys, time, urllib.request, datetime as dt
 
 BASE = 'https://cdn.cboe.com/api/global/delayed_quotes/'
-TICKERS = ['SPY', 'QQQ', 'IWM', 'TLT', 'GLD']   # edit this list to track more underlyings
+TICKERS = ['SPY', 'QQQ', 'SOXX', 'IWM', 'TLT', 'GLD']   # edit this list to track more underlyings
 INDEX = {'SPX': '_SPX', 'RUT': '_RUT', 'NDX': '_NDX'}
 OCC = re.compile(r'^([A-Z0-9]+?)(\d{6})([CP])(\d{8})$')
 
