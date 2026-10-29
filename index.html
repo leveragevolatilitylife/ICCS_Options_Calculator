@@ -197,6 +197,10 @@ textarea.plan{width:100%;min-height:150px;border:1px solid var(--border);border-
 tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-panel-hover)}
 .loadnote{font-size:13px;color:var(--good);background:var(--good-soft);border-radius:4px;padding:8px 12px}
 .loadnote.warn{color:var(--warn);background:var(--warn-soft)}
+.acctbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 10px}
+.acctbar .abtn{font:inherit;cursor:pointer;padding:6px 14px;border-radius:999px;border:1px solid var(--line,#2a3342);background:transparent;color:inherit}
+.acctbar .abtn[aria-pressed=true]{background:var(--accent,#c8754a);border-color:var(--accent,#c8754a);color:#fff}
+.acctbar .abtn small{opacity:.75;margin-left:6px}
 .xlbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 6px}
 .estbox{border:1px dashed var(--border);border-radius:4px;padding:8px 10px;font-size:12.5px;color:var(--text-secondary);line-height:1.6}
 .srow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:6px 0 12px}
@@ -259,6 +263,7 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
       <label class="btn primary" for="xlFile" style="display:inline-flex;align-items:center">手動匯入 xlsx</label><input id="xlFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
       <span class="hint" id="xlMsg" role="status">開啟網頁時會自動讀取同一個資料夾的 VTS_Iron_Condor_strategy.xlsx（在 GitHub 上更新它即可）；也可手動匯入。沒有平倉日與平倉價的列會當成「進行中」。</span>
     </div>
+    <div class="acctbar" id="acctBar" role="group" aria-label="切換期權帳戶" hidden></div>
     <div id="posBody"></div>
   </section>
   <div class="loadnote" id="loadnote" role="status" hidden></div>
@@ -744,7 +749,7 @@ const VTS = (function(){
       if (!(Number.isInteger(x.contracts) && x.contracts >= 1)) return bad('口數必須是 1 以上的整數');
       const q = {type:x.type, ticker:String(x.ticker || '—').slice(0,24), openDate:x.openDate, expiry:x.expiry, contracts:x.contracts,
         spotOpen:num(x.spotOpen), nlv:num(x.nlv), tpPrem:num(x.tpPrem), slPrem:num(x.slPrem), feeLeg:num(x.feeLeg) ?? 0.65,
-        baro:num(x.baro), ivp:num(x.ivp), vix:num(x.vix), src:x.src === 'excel' ? 'excel' : null,
+        baro:num(x.baro), ivp:num(x.ivp), vix:num(x.vix), src:x.src === 'excel' ? 'excel' : null, account:typeof x.account === 'string' ? x.account.slice(0,60) : '',
         note:String(x.note || '').slice(0,200), status:x.status === 'closed' ? 'closed' : 'open',
         mark:num(x.mark), markSpot:num(x.markSpot), iv:num(x.iv), farExpiry:(x.farExpiry && parseDate(x.farExpiry) === x.farExpiry) ? x.farExpiry : null,
         closeDate:null, closePx:null};
@@ -842,9 +847,11 @@ const VTS = (function(){
     o = o || {};
     const gIC = isNum(o.gainIC) ? o.gainIC : 50, lIC = isNum(o.lossIC) ? o.lossIC : 50, gC = isNum(o.gainCal) ? o.gainCal : 25, lC = isNum(o.lossCal) ? o.lossCal : 25;
     const feeLeg = isNum(o.fee) ? o.fee : 0.65;
-    const list = [], skipped = [];
+    const list = [], skipped = [], accounts = [];
     const r4 = x => Math.round(x*10000)/10000;
     sheets.forEach(sh => {
+      const isEx = /example|範例/i.test(sh.name || '');
+      if (!isEx && accounts.indexOf(sh.name) < 0) accounts.push(sh.name);
       const {col, hdr} = findCols(sh);
       Object.keys(sh.rows).map(Number).sort((a,b) => a-b).forEach(rn => {
         if (rn <= hdr) return;
@@ -857,7 +864,7 @@ const VTS = (function(){
         const note = g('note');
         const q = {type, ticker:String(g('ticker') || '—').trim().toUpperCase(), openDate:serialDate(g('open')), expiry:serialDate(g('near')), contracts:Math.round(g('n')),
           spotOpen:isNum(g('px')) ? g('px') : null, nlv:isNum(g('nlv')) ? g('nlv') : null, vix:isNum(g('vix')) ? g('vix') : null,
-          ivp:isNum(g('ivp')) ? r4(g('ivp')*100) : null, baro:isNum(g('baro')) ? r4(g('baro')*100) : null, feeLeg, src:'excel',
+          ivp:isNum(g('ivp')) ? r4(g('ivp')*100) : null, baro:isNum(g('baro')) ? r4(g('baro')*100) : null, feeLeg, src:'excel', account:isEx ? '' : sh.name,
           note:(typeof note === 'string' ? note.trim() : '') || ('來自 Excel：' + where)};
         if (type === 'IC'){
           q.lp = g('lp'); q.sp = g('sp'); q.sc = g('sc'); q.lc = g('lc'); q.credit = g('prem');
@@ -868,11 +875,11 @@ const VTS = (function(){
           if (isNum(g('far'))) q.farExpiry = serialDate(g('far'));
         }
         if (isNum(g('cdate')) && isNum(g('cpx'))){ q.status = 'closed'; q.closeDate = serialDate(g('cdate')); q.closePx = g('cpx'); } else q.status = 'open';
-        q.id = ('x' + type + q.openDate.replace(/-/g,'') + '_' + (type === 'IC' ? q.sp : q.K) + '_' + q.ticker).replace(/[^A-Za-z0-9_-]/g,'').slice(0,40);
+        q.id = ('x' + (isEx || accounts.length < 2 ? '' : accounts.indexOf(sh.name)) + type + q.openDate.replace(/-/g,'') + '_' + (type === 'IC' ? q.sp : q.K) + '_' + q.ticker).replace(/[^A-Za-z0-9_-]/g,'').slice(0,40);
         list.push(q);
       });
     });
-    return {list, skipped};
+    return {list, skipped, accounts};
   }
 
   return {readXlsx, positionsFromSheets, serialDate, envVerdict, sizeIC, sizeCal, payoffIC, bsPut, bsCall, calExpiry, parseOHLC, keyLevels, parseYahoo, parseTwelve,
@@ -1450,7 +1457,7 @@ const VTS = (function(){
         '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+Y(Math.max(b.o,b.c)).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1, Math.abs(Y(b.o)-Y(b.c))).toFixed(1)+'" fill="'+c+'"/>'; });
     /* trade markers for positions on this ticker */
     let nMark = 0;
-    if (tkr) POS.filter(q => q.ticker === tkr).forEach(q => {
+    if (tkr) POS.filter(q => q.ticker === tkr && inAcc(q)).forEach(q => {
       const mk = (date, kind) => {
         if (date < bars[0].d || date > last.d) return;
         let i = -1; for (let k = 0; k < nB; k++){ if (bars[k].d <= date) i = k; else break; }
@@ -1657,6 +1664,24 @@ const VTS = (function(){
   /* ---------- positions: journal, risk summary, analysis ---------- */
   const POSKEY = 'vts-calc-positions-v1';
   let closedOpen = false, POS = [], loadedId = null, delArm = null;
+  const ACCKEY = 'vts-calc-acct-v1', ACCLKEY = 'vts-calc-accts-v1';
+  let ACCTS = [], ACC = '';
+  try { ACC = localStorage.getItem(ACCKEY) || ''; ACCTS = JSON.parse(localStorage.getItem(ACCLKEY) || '[]').filter(x => typeof x === 'string'); } catch(e){}
+  const inAcc = q => !ACCTS.length || (q.account || '') === ACC;
+  function syncAccts(){
+    POS.forEach(q => { if (q.account && ACCTS.indexOf(q.account) < 0) ACCTS.push(q.account); });
+    if (ACCTS.length && ACCTS.indexOf(ACC) < 0) ACC = ACCTS[0];
+    try { localStorage.setItem(ACCLKEY, JSON.stringify(ACCTS)); localStorage.setItem(ACCKEY, ACC); } catch(e){}
+  }
+  function renderAcctBar(){
+    const bar = $('acctBar'); if (!bar) return;
+    if (ACCTS.length < 2){ bar.hidden = true; bar.innerHTML = ''; return; }
+    bar.hidden = false;
+    bar.innerHTML = '<span class="hint">帳戶</span>' + ACCTS.map(a => { const n = POS.filter(q => q.account === a && q.status === 'open').length;
+      return '<button type="button" class="abtn" data-acc="' + esc(a) + '" aria-pressed="' + (a === ACC) + '">' + esc(a) + '<small>進行中 ' + n + '</small></button>'; }).join('');
+  }
+  $('acctBar').addEventListener('click', ev => { const b = ev.target.closest('[data-acc]'); if (!b || b.dataset.acc === ACC) return;
+    ACC = b.dataset.acc; loadedId = null; syncAccts(); renderPositions(); renderK(); });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + hh(d.getMonth()+1) + '-' + hh(d.getDate()); };
   const lastCloseFor = t => (KROWS && KSYM === t && (($('ticker').value || '').trim().toUpperCase() === t)) ? r2(KROWS[KROWS.length-1].c) : null;
   const spotFor = q => (lastCloseFor(q.ticker) != null ? lastCloseFor(q.ticker) : (loadedId === q.id && numOf('spot') != null ? r2(numOf('spot')) : null));
@@ -1792,8 +1817,9 @@ const VTS = (function(){
   function renderPositions(){
     const host = $('posBody'); if (!host) return;
     const W = Math.max(300, Math.floor(host.clientWidth || 720));
-    const open = POS.filter(q => q.status === 'open').sort((a,b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : 0);
-    const closed = POS.filter(q => q.status === 'closed').sort((a,b) => a.closeDate < b.closeDate ? 1 : a.closeDate > b.closeDate ? -1 : 0);
+    syncAccts(); renderAcctBar();
+    const open = POS.filter(q => inAcc(q) && q.status === 'open').sort((a,b) => a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : 0);
+    const closed = POS.filter(q => inAcc(q) && q.status === 'closed').sort((a,b) => a.closeDate < b.closeDate ? 1 : a.closeDate > b.closeDate ? -1 : 0);
     let h = '<h3 style="margin-top:6px">進行中的持倉</h3>';
     if (!open.length) h += '<p class="empty" style="padding:14px 8px">還沒有進行中的持倉。可以按上方「匯入 VTS_Iron_Condor_strategy.xlsx」；更新 repo 內的 Excel 後重新整理即可。</p>';
     else h += riskSummary(open) + '<div class="pgrid">' + open.map(openCard).join('') + '</div>';
@@ -1829,7 +1855,7 @@ const VTS = (function(){
     q[f] = v; persist(); renderPositions();
   });
   function loadPosition(q){
-    const open = POS.filter(x => x.status === 'open' && x.id !== q.id), tm = times(q), isIC = q.type === 'IC';
+    const open = POS.filter(x => x.status === 'open' && x.id !== q.id && (x.account || '') === (q.account || '')), tm = times(q), isIC = q.type === 'IC';
     $('ticker').value = q.ticker;
     const live = spotFor(q), spot = live != null ? live : q.spotOpen;
     const same = open.filter(x => x.ticker === q.ticker && x.expiry === q.expiry && x.spotOpen != null);
@@ -1862,6 +1888,7 @@ const VTS = (function(){
       const res = VTS.positionsFromSheets(sheets, {gainIC:numOf('gainIC'), lossIC:numOf('lossIC'), gainCal:numOf('gainCal'), lossCal:numOf('lossCal'), fee:numOf('fee')});
       const nz = VTS.normalizePositions(res.list);
       if (!nz.list.length){ msg('沒有讀到交易列。這個功能對應課程試算表的版面（標題在第 7 列，交易從第 8、9 列開始，B 欄是 Iron Condor 或 Calendar）。' + (nz.errors[0] ? ' ' + nz.errors[0] : ''), 'bad'); return; }
+      if (res.accounts && res.accounts.length){ if (isDefault) ACCTS = res.accounts.slice(); else res.accounts.forEach(a => { if (ACCTS.indexOf(a) < 0) ACCTS.push(a); }); }
       if (isDefault){ POS = POS.filter(x => x.src === 'excel' && nz.list.some(q => q.id === x.id)); if (loadedId && !POS.some(x => x.id === loadedId)) loadedId = null; }
       let added = 0, updated = 0;
       nz.list.forEach(q => { const i = POS.findIndex(x => x.id === q.id);
