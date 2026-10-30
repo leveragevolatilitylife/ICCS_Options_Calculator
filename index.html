@@ -1713,15 +1713,15 @@ const VTS = (function(){
 
   function legData(q){
     const f = VOLJ; if (!f || !Array.isArray(f.legs)) return null;
-    const find = (date, ty, K) => f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.mid != null);
+    const find = (date, ty, K) => f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null);
     let mark, iv, txt;
     if (q.type === 'CAL'){
       if (!q.farExpiry) return null;
       const n = find(q.expiry, 'P', q.K), fr = find(q.farExpiry, 'P', q.K); if (!n || !fr) return null;
-      mark = fr.mid - n.mid; iv = fr.iv; txt = '長腳 ' + q.farExpiry + ' 中間價 ' + prem(fr.mid) + '（買 ' + fr.bid + '／賣 ' + fr.ask + '）減 短腳 ' + q.expiry + ' 中間價 ' + prem(n.mid) + '（買 ' + n.bid + '／賣 ' + n.ask + '）';
+      mark = fr.bid - n.ask; iv = fr.iv; txt = '立即平倉價：賣出長腳 ' + q.farExpiry + ' 用買價 Bid ' + prem(fr.bid) + '，減 買回短腳 ' + q.expiry + ' 用賣價 Ask ' + prem(n.ask) + ((fr.mid != null && n.mid != null) ? '（中間價參考：' + prem(fr.mid - n.mid) + '）' : '');
     } else {
       const a = find(q.expiry, 'P', q.sp), b = find(q.expiry, 'P', q.lp), c = find(q.expiry, 'C', q.sc), d = find(q.expiry, 'C', q.lc); if (!a || !b || !c || !d) return null;
-      mark = a.mid - b.mid + c.mid - d.mid; iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null; txt = '買回四隻腳的中間價合計（短 Put ' + prem(a.mid) + '、長 Put ' + prem(b.mid) + '、短 Call ' + prem(c.mid) + '、長 Call ' + prem(d.mid) + '）';
+      mark = a.ask - b.bid + c.ask - d.bid; iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null; txt = '立即平倉價：買回短腳用賣價 Ask（短 Put ' + prem(a.ask) + '、短 Call ' + prem(c.ask) + '），賣出長腳用買價 Bid（長 Put ' + prem(b.bid) + '、長 Call ' + prem(d.bid) + '）';
     }
     return {mark, iv, txt, updated:(f.updated || '').replace('T',' ').slice(0,16) + ' UTC'};
   }
