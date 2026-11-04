@@ -1722,13 +1722,15 @@ const VTS = (function(){
       return Object.assign({}, l, {bid:Math.round(bid*100)/100, ask:Math.round(ask*100)/100, mid:l.mid != null ? Math.round((bid+ask)/2*1000)/1000 : null}); };
     const find = (date, ty, K) => { const l = f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null); return l ? adjust(l) : null; };
     let mark, iv, txt;
+    const M = l => l.mid != null ? l.mid : (l.bid + l.ask)/2, ba = l => '（Bid ' + prem(l.bid) + '／Ask ' + prem(l.ask) + '）';
     if (q.type === 'CAL'){
       if (!q.farExpiry) return null;
       const n = find(q.expiry, 'P', q.K), fr = find(q.farExpiry, 'P', q.K); if (!n || !fr) return null;
-      mark = fr.bid - n.ask; iv = fr.iv; txt = '立即平倉價：賣出長腳 ' + q.farExpiry + ' 用買價 Bid ' + prem(fr.bid) + '，減 買回短腳 ' + q.expiry + ' 用賣價 Ask ' + prem(n.ask) + ((fr.mid != null && n.mid != null) ? '（中間價參考：' + prem(fr.mid - n.mid) + '）' : '');
+      mark = M(fr) - M(n); iv = fr.iv; txt = '組合單中間價：長腳 ' + q.farExpiry + ' 中間價 ' + prem(M(fr)) + ba(fr) + ' 減 短腳 ' + q.expiry + ' 中間價 ' + prem(M(n)) + ba(n) + '；立即成交的保守價約 ' + prem(fr.bid - n.ask);
     } else {
       const a = find(q.expiry, 'P', q.sp), b = find(q.expiry, 'P', q.lp), c = find(q.expiry, 'C', q.sc), d = find(q.expiry, 'C', q.lc); if (!a || !b || !c || !d) return null;
-      mark = a.ask - b.bid + c.ask - d.bid; iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null; txt = '立即平倉價：買回短腳用賣價 Ask（短 Put ' + prem(a.ask) + '、短 Call ' + prem(c.ask) + '），賣出長腳用買價 Bid（長 Put ' + prem(b.bid) + '、長 Call ' + prem(d.bid) + '）';
+      mark = M(a) - M(b) + M(c) - M(d); iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null;
+      txt = '組合單中間價：短 Put ' + prem(M(a)) + '、短 Call ' + prem(M(c)) + ' 減 長 Put ' + prem(M(b)) + '、長 Call ' + prem(M(d)) + '（四隻腳各取 Bid／Ask 的中間）；立即成交的保守價約 ' + prem(a.ask - b.bid + c.ask - d.bid);
     }
     return {mark, iv, txt, updated:(f.updated || '').replace('T',' ').slice(0,16) + ' UTC', ageMin:isFinite(snapMs) ? Math.round((Date.now() - snapMs)/60000) : null, adj:canAdj ? {snapSpot, curSpot} : null};
   }
