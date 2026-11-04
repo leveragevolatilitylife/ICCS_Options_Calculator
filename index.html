@@ -1713,7 +1713,14 @@ const VTS = (function(){
 
   function legData(q){
     const f = VOLJ; if (!f || !Array.isArray(f.legs)) return null;
-    const find = (date, ty, K) => f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null);
+    const snapSpot = f.chains && f.chains[q.ticker] ? f.chains[q.ticker].spot : null, curSpot = spotFor(q), snapMs = Date.parse(f.updated), rt = (numOf('rate') ?? 4)/100;
+    const canAdj = isFinite(snapMs) && snapSpot > 0 && curSpot > 0 && Math.abs(curSpot/snapSpot - 1) > 0.0002;
+    const adjust = l => { if (!canAdj || !(l.iv > 0)) return l;
+      const yrs = ms => Math.max(0, ms)/(365*864e5), end = Date.parse(l.date + 'T20:00:00Z'), fn = l.type === 'P' ? VTS.bsPut : VTS.bsCall;
+      const d = fn(curSpot, l.K, yrs(end - Date.now()), rt, l.iv/100) - fn(snapSpot, l.K, yrs(end - snapMs), rt, l.iv/100);
+      const bid = Math.max(0, l.bid + d), ask = Math.max(bid, l.ask + d);
+      return Object.assign({}, l, {bid:Math.round(bid*100)/100, ask:Math.round(ask*100)/100, mid:l.mid != null ? Math.round((bid+ask)/2*1000)/1000 : null}); };
+    const find = (date, ty, K) => { const l = f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null); return l ? adjust(l) : null; };
     let mark, iv, txt;
     if (q.type === 'CAL'){
       if (!q.farExpiry) return null;
@@ -1723,7 +1730,7 @@ const VTS = (function(){
       const a = find(q.expiry, 'P', q.sp), b = find(q.expiry, 'P', q.lp), c = find(q.expiry, 'C', q.sc), d = find(q.expiry, 'C', q.lc); if (!a || !b || !c || !d) return null;
       mark = a.ask - b.bid + c.ask - d.bid; iv = (a.iv != null && c.iv != null) ? (a.iv + c.iv)/2 : null; txt = '立即平倉價：買回短腳用賣價 Ask（短 Put ' + prem(a.ask) + '、短 Call ' + prem(c.ask) + '），賣出長腳用買價 Bid（長 Put ' + prem(b.bid) + '、長 Call ' + prem(d.bid) + '）';
     }
-    return {mark, iv, txt, updated:(f.updated || '').replace('T',' ').slice(0,16) + ' UTC'};
+    return {mark, iv, txt, updated:(f.updated || '').replace('T',' ').slice(0,16) + ' UTC', ageMin:isFinite(snapMs) ? Math.round((Date.now() - snapMs)/60000) : null, adj:canAdj ? {snapSpot, curSpot} : null};
   }
   function estMark(q){
     const tm = times(q), spot = spotFor(q); if (spot == null || tm.dShort <= 0) return null;
@@ -1766,7 +1773,7 @@ const VTS = (function(){
       const pl = VTS.unrealized(q, mark), frac = Math.max(0, Math.min(1, isIC ? (q.slPrem - mark)/(q.slPrem - q.tpPrem) : (mark - q.slPrem)/(q.tpPrem - q.slPrem)));
       c += '<div><div class="pl ' + (pl >= 0 ? 'pos' : 'neg') + '">' + sgn(Math.round(pl)) + ' <span class="hint">未實現（未扣手續費）</span></div>' +
         '<div class="hint">佔最大虧損 ' + spct(pl/ex.maxLoss, 1) + (ex.maxProfit ? '；佔最大獲利 ' + spct(pl/ex.maxProfit, 1) : '') + '</div>' +
-        (lg ? '<div class="hint">' + (isIC ? '買回價' : '價差價值') + ' ' + prem(mark) + '＝' + lg.txt + '。Cboe 延遲報價（約 15 分鐘），資料時間 ' + lg.updated + '；不是你券商的成交價，要改用券商報價請填在右上欄。</div>' : '') + '</div>' +
+        (lg ? '<div class="hint">' + (isIC ? '買回價' : '價差價值') + ' ' + prem(mark) + '＝' + lg.txt + '。Cboe 延遲報價，快照時間 ' + lg.updated + (lg.ageMin != null ? '（距現在 ' + (lg.ageMin >= 120 ? Math.round(lg.ageMin/60) + ' 小時' : lg.ageMin + ' 分鐘') + '）' : '') + (lg.adj ? '；快照時標的價 ' + lg.adj.snapSpot + '，現價 ' + lg.adj.curSpot + '，各腳報價已用 Black-Scholes（各腳自己的 IV）依現價與剩餘時間校正' : '') + '。' + (lg.ageMin != null && lg.ageMin > 60 ? '<b style="color:var(--bad)">快照已超過 1 小時，可能是非交易時段或排程沒跑，數字僅供參考。</b>' : '') + '不是你券商的成交價，要改用券商報價請填在右上欄。</div>' : '') + '</div>' +
         '<div><div class="pbar"><i style="left:' + (frac*100).toFixed(1) + '%"></i></div><div class="pbl"><span>止損 ' + prem(q.slPrem) + '</span><span>止盈 ' + prem(q.tpPrem) + '</span></div></div>';
     } else {
       const es = estMark(q);
