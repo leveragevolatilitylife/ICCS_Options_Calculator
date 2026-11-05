@@ -377,6 +377,8 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
         <select id="klProv"><option value="twelve">Twelve Data（免費金鑰，美股即時）</option><option value="yahoo">Yahoo Finance（免金鑰，常被瀏覽器擋下）</option></select></div>
       <div class="field" id="klKeyWrap"><label for="klKey">Twelve Data API 金鑰</label>
         <input id="klKey" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的免費金鑰"><span class="sub">只存在這個瀏覽器，不會放進頁面</span></div>
+      <div class="field" id="ghWrap"><label for="ghTok">GitHub 權杖（選填，用來更新期權報價）</label>
+        <input id="ghTok" type="password" autocomplete="off" spellcheck="false" placeholder="fine-grained token，只給 Actions 讀寫"><span class="sub">只存在這個瀏覽器。按「抓取即時行情」時會請 GitHub 重新抓期權報價（約 1 分鐘）；沒填就只讀 repo 裡最新一份快照。</span></div>
     </div>
     <div class="btn-row" style="margin-top:10px">
       <button class="btn primary" id="klLive" type="button">抓取即時行情</button>
@@ -1571,7 +1573,7 @@ const VTS = (function(){
   const CBOE = 'https://cdn.cboe.com/api/global/delayed_quotes/';
   function pctRank(arr, v){ const a = arr.filter(x => isFinite(x)); if (a.length < 120) return null; return a.filter(x => x < v).length / a.length * 100; }
   function parseOcc(o){ const m = /^([A-Z0-9]+?)(\d{6})([CP])(\d{8})$/.exec(o || ''); return m ? {date:'20' + m[2].slice(0,2) + '-' + m[2].slice(2,4) + '-' + m[2].slice(4,6), type:m[3], K:Number(m[4])/1000} : null; }
-  let VOLJ = null;
+  let VOLJ = null, VOLMSG = '', ghBusy = false;
   async function volFile(force){
     if (VOLJ !== null && !force) return VOLJ || null;
     try { const j = await getJSON('data/vol.json?t=' + Date.now()); VOLJ = (j && j.updated) ? j : false; } catch(e){ VOLJ = false; }
@@ -1607,7 +1609,8 @@ const VTS = (function(){
   function renderLive(){
     const b = $('liveBox'), L = LIVE; if (!b) return;
     const man = n => { const v = numOf(n); return v != null ? v : null; };
-    if (!L){ b.innerHTML = '<span class="lh">即時行情：尚未取得。上方欄位是你開倉當下的數字，下方的即時數字只供對照，不會改變計算。</span>'; $('ivLive').textContent = ''; return; }
+    const vm = VOLMSG ? '<div class="lh">期權報價：' + esc(VOLMSG) + '</div>' : '';
+    if (!L){ b.innerHTML = '<span class="lh">即時行情：尚未取得。上方欄位是你開倉當下的數字，下方的即時數字只供對照，不會改變計算。</span>' + vm; $('ivLive').textContent = ''; return; }
     const row = (k, v, cmp) => '<div>' + k + ' <b>' + v + '</b>' + (cmp ? ' <span class="lh">' + cmp + '</span>' : '') + '</div>';
     let h = '<div class="lh">即時行情（只供對照，不改變計算；上方欄位是開倉當下的數字）</div>';
     if (L.vix) h += row('VIX', L.vix.v.toFixed(2), '（' + L.vix.src + '，' + L.vix.t + (man('vix') != null ? '；開倉時 ' + man('vix') : '') + '）') +
@@ -1615,13 +1618,44 @@ const VTS = (function(){
     else if (L.vixErr) h += '<div class="klstat bad">VIX 抓不到：' + esc(L.vixErr) + '</div>';
     if (L.far) h += row('遠月 IV（' + L.far.date + ' ' + L.far.K + ' Put）', L.far.iv.toFixed(1) + '%', '（' + L.far.src + (man('ivest') != null ? '；開倉時 ' + man('ivest') + '%' : '') + '）');
     else if (L.farErr) h += '<div class="klstat bad">遠月 IV 抓不到：' + esc(L.farErr) + '</div>';
-    b.innerHTML = h + '<div class="lh">更新於 ' + L.stamp + '。資料有約 15 分鐘延遲，且為非官方公開介面，可能隨時失效。</div>';
+    b.innerHTML = h + vm + '<div class="lh">更新於 ' + L.stamp + '。資料有約 15 分鐘延遲，且為非官方公開介面，可能隨時失效。</div>';
     $('ivLive').textContent = L.far ? '即時 ' + L.far.iv.toFixed(1) + '%（' + L.far.date + ' ' + L.far.K + ' Put）' : '';
   }
-  async function fetchVol(){
+  const GHKEY = 'vts-calc-ghtoken-v1';
+  const ghRepo = () => { const h = location.hostname, m = /^([^.]+)\.github\.io$/.exec(h), seg = location.pathname.split('/')[1];
+    return (m && seg) ? m[1] + '/' + seg : 'leveragevolatilitylife/ICCS_Options_Calculator'; };
+  async function triggerVol(){
+    const tok = ($('ghTok').value || '').trim(); if (!tok) return false;
+    const repo = ghRepo(), H = {Authorization:'Bearer ' + tok, Accept:'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'};
+    const prev = VOLJ && VOLJ.updated || null;
+    VOLMSG = '已請 GitHub 重新抓取，約 1 分鐘…'; renderLive();
+    const r = await fetch('https://api.github.com/repos/' + repo + '/actions/workflows/vol.yml/dispatches', {method:'POST', headers:Object.assign({'Content-Type':'application/json'}, H), body:JSON.stringify({ref:'main'}), credentials:'omit'});
+    if (r.status !== 204){ let m = ''; try { m = (await r.json()).message || ''; } catch(e){}
+      throw new Error('觸發失敗（HTTP ' + r.status + (r.status === 401 || r.status === 403 || r.status === 404 ? '，權杖可能不對、已過期或沒有 Actions 讀寫權限' : '') + (m ? '：' + m : '') + '）'); }
+    for (let i = 0; i < 22; i++){
+      await new Promise(ok => setTimeout(ok, 7000));
+      try {
+        const g = await fetch('https://api.github.com/repos/' + repo + '/contents/data/vol.json?ref=main&t=' + Date.now(), {headers:Object.assign({}, H, {Accept:'application/vnd.github.raw+json'}), cache:'no-store', credentials:'omit'});
+        if (!g.ok) continue; const j = await g.json();
+        if (j && j.updated && j.updated !== prev){ VOLJ = j; return true; }
+      } catch(e){}
+    }
+    throw new Error('GitHub 還在執行或失敗，請稍後再按一次');
+  }
+  async function fetchVol(trigger){
+    if (ghBusy) return; ghBusy = true;
+    try {
+      await runVol();
+      if (trigger && ($('ghTok').value || '').trim()){
+        try { if (await triggerVol()){ VOLMSG = '已更新（GitHub 剛抓完）'; await runVol(true); } }
+        catch(e){ VOLMSG = (e && e.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(e && e.message || e); renderLive(); }
+      } else if (trigger) { VOLMSG = '沒有填 GitHub 權杖，使用 repo 內最新一份快照'; renderLive(); }
+    } finally { ghBusy = false; }
+  }
+  async function runVol(keep){
     if (volBusy) return; volBusy = true;
     const sym = ($('ticker').value || '').trim().toUpperCase(), next = {stamp:stamp()};
-    await volFile(true);
+    if (!keep) await volFile(true);
     const [a, c] = await Promise.allSettled([volVix(), sym ? volFar(sym) : Promise.reject(new Error('先填標的代號'))]);
     if (a.status === 'fulfilled') next.vix = a.value; else next.vixErr = (a.reason && a.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(a.reason && a.reason.message || a.reason);
     if (c.status === 'fulfilled') next.far = c.value; else next.farErr = (c.reason && c.reason.name === 'TypeError') ? '被瀏覽器的安全限制擋下，或網路不通' : String(c.reason && c.reason.message || c.reason);
@@ -1631,7 +1665,7 @@ const VTS = (function(){
   async function fetchLive(fromTimer){
     const sym = ($('ticker').value || '').trim().toUpperCase();
     if (!sym){ setStat('先在上方「標的代號」欄位填入代號，例如 SPY。', 'bad'); return; }
-    if (!fromTimer || Date.now() - lastVol > 600000){ lastVol = Date.now(); fetchVol(); }
+    if (!fromTimer || Date.now() - lastVol > 600000){ lastVol = Date.now(); fetchVol(true); }
     if (liveBusy) return; liveBusy = true;
     const btn = $('klLive'); btn.disabled = true; btn.textContent = '抓取中…';
     try {
@@ -1656,6 +1690,8 @@ const VTS = (function(){
   }
   $('klAuto').addEventListener('change', () => { setTimer(); if ($('klAuto').checked) fetchLive(false); });
   $('klProv').addEventListener('change', () => { try { localStorage.setItem(PKEY, provider()); } catch(e){} syncProv(); setTimer(); });
+  $('ghTok').addEventListener('change', () => { try { localStorage.setItem(GHKEY, ($('ghTok').value || '').trim()); } catch(e){} });
+  try { const gt = localStorage.getItem(GHKEY); if (gt) $('ghTok').value = gt; } catch(e){}
   try { const pv = localStorage.getItem(PKEY); if (pv === 'yahoo' || pv === 'twelve') $('klProv').value = pv; const k = localStorage.getItem(TKEY); if (k) $('klKey').value = k; } catch(e){}
   syncProv();
   KROWS = loadK(); if (KROWS){ KINFO = '資料來源：上次存檔的資料'; describeK(); $('klData').open = false; }

@@ -1,7 +1,5 @@
 name: Update volatility data
 on:
-  schedule:
-    - cron: '*/15 13-21 * * 1-5'
   workflow_dispatch:
 permissions:
   contents: write
