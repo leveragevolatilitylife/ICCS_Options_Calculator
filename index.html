@@ -304,7 +304,7 @@ tr[data-id].clk{cursor:pointer}tr[data-id].clk:hover td{background:var(--bg-pane
     <div class="g4">
       <div class="field"><label for="nlv">總淨清算價值（美元）</label><input id="nlv" type="number" inputmode="decimal" step="any" min="0"></div>
       <div class="field"><label for="ticker">標的代號</label><input id="ticker" type="text" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
-      <div class="field"><label for="spot">現價（即時，自動更新）</label><input id="spot" type="number" inputmode="decimal" step="any" min="0" readonly style="opacity:.85;cursor:default"><span class="sub" id="spotSub">依標的代號自動抓取最新價</span></div>
+      <input type="hidden" id="spotbase"><div class="field"><label for="spot">現價（即時，自動更新）</label><input id="spot" type="number" inputmode="decimal" step="any" min="0" readonly style="opacity:.85;cursor:default"><span class="sub" id="spotSub">依標的代號自動抓取最新價</span></div>
       <div class="field"><label for="dte">到期天數（短腳）</label><input id="dte" type="number" inputmode="numeric" step="1" min="0"><span class="sub">含週末與假日的日曆天數</span></div>
     </div>
   </section>
@@ -491,8 +491,8 @@ const VTS = (function(){
     r.distCall = (p.sc - p.spot) / p.spot;
     r.bePut = p.sp - p.credit;
     r.beCall = p.sc + p.credit;
-    r.lowThr = p.spot * (1 - move);
-    r.highThr = p.spot * (1 + move);
+    r.lowThr = (p.spotBase || p.spot) * (1 - move);
+    r.highThr = (p.spotBase || p.spot) * (1 + move);
     r.rr = r.maxLoss > 0 ? r.maxProfit / r.maxLoss : null;
     return r;
   }
@@ -525,8 +525,8 @@ const VTS = (function(){
     r.feePct = r.maxLoss > 0 ? r.fees / r.maxLoss : null;
     exitsCommon(r, p, p.debit*gain, p.debit*loss);
     r.dist = (p.kstrike - p.spot) / p.spot;
-    r.lowThr = p.spot * (1 - move);
-    r.highThr = p.spot * (1 + move);
+    r.lowThr = (p.spotBase || p.spot) * (1 - move);
+    r.highThr = (p.spotBase || p.spot) * (1 + move);
     return r;
   }
 
@@ -894,7 +894,7 @@ const VTS = (function(){
   const $ = id => document.getElementById(id);
   const IDS = ['baro','ivp','vix','thr','near','vixref','nlv','ticker','spot','dte','lp','sp','sc','lc','credit','dput','dcall',
     'kstrike','debit','dtefar','layers','existpx','ovr','allocIC','allocCal','maxTrades','gainIC','lossIC','moveRule','gainCal','lossCal',
-    'fee','stratAlloc','dteMin','dteMax','dTarget','dTol','atmTol','ivest','rate'];
+    'fee','stratAlloc','dteMin','dteMax','dTarget','dTol','atmTol','ivest','rate','spotbase'];
   const DEFAULTS = {thr:'25',near:'3',vixref:'15',allocIC:'3',allocCal:'2',maxTrades:'3',gainIC:'50',lossIC:'50',moveRule:'4',
     gainCal:'25',lossCal:'25',rate:'4',fee:'0.65',stratAlloc:'20',dteMin:'45',dteMax:'75',dTarget:'0.15',dTol:'0.03',atmTol:'1'};
   /* Example rows come from the course spreadsheet (IC example row; Calendar paper-trade row). */
@@ -939,7 +939,7 @@ const VTS = (function(){
   function params(active){
     const isIC = active === 'IC';
     return {
-      nlv:numOf('nlv'), spot:numOf('spot'), lp:numOf('lp'), sp:numOf('sp'), sc:numOf('sc'), lc:numOf('lc'), credit:numOf('credit'),
+      nlv:numOf('nlv'), spot:numOf('spot'), spotBase:numOf('spotbase'), lp:numOf('lp'), sp:numOf('sp'), sc:numOf('sc'), lc:numOf('lc'), credit:numOf('credit'),
       dPut:numOf('dput'), dCall:numOf('dcall'), kstrike:numOf('kstrike'), debit:numOf('debit'), ovr:numOf('ovr'),
       allocPct: isIC ? numOf('allocIC') : numOf('allocCal'),
       gainPct: isIC ? numOf('gainIC') : numOf('gainCal'),
@@ -1906,7 +1906,7 @@ const VTS = (function(){
     const same = open.filter(x => x.ticker === q.ticker && x.expiry === q.expiry && x.spotOpen != null);
     const ch = {baro:q.baro != null ? String(q.baro) : '', ivp:q.ivp != null ? String(q.ivp) : '', vix:q.vix != null ? String(q.vix) : '',
       nlv:q.nlv != null ? String(q.nlv) : '', ticker:q.ticker, spot:spot != null ? String(r2(spot)) : '', dte:String(Math.max(0, tm.dShort)),
-      layers:String(open.length), existpx:same.length ? String(same[0].spotOpen) : '', ovr:String(q.contracts), mode:isIC ? 'ic' : 'cal'};
+      spotbase:q.spotOpen != null ? String(q.spotOpen) : '', layers:String(open.length), existpx:same.length ? String(same[0].spotOpen) : '', ovr:String(q.contracts), mode:isIC ? 'ic' : 'cal'};
     if (isIC){ ch.lp = String(q.lp); ch.sp = String(q.sp); ch.sc = String(q.sc); ch.lc = String(q.lc); ch.credit = String(q.credit); }
     else { ch.kstrike = String(q.K); ch.debit = String(q.debit); ch.dtefar = q.farExpiry ? String(Math.max(0, tm.dFar)) : ''; ch.ivest = q.iv != null ? String(q.iv) : ''; }
     const cur = readState();
@@ -1977,7 +1977,7 @@ const VTS = (function(){
     syncPresets();
   }
 
-  function onUserEdit(ev){ isExample = false; if (!(ev && ev.target && ev.target.id === 'spot')){ loadedId = null; setAnchor(null); $('loadnote').hidden = true; } save(); update(); }
+  function onUserEdit(ev){ isExample = false; if (!(ev && ev.target && ev.target.id === 'spot')){ loadedId = null; setAnchor(null); $('spotbase').value = ''; $('loadnote').hidden = true; } save(); update(); }
 
   /* ---------- wiring ---------- */
   IDS.forEach(id => $(id).addEventListener('input', onUserEdit));
