@@ -1756,7 +1756,7 @@ const VTS = (function(){
       const d = fn(curSpot, l.K, yrs(end - Date.now()), rt, l.iv/100) - fn(snapSpot, l.K, yrs(end - snapMs), rt, l.iv/100);
       const bid = Math.max(0, l.bid + d), ask = Math.max(bid, l.ask + d);
       return Object.assign({}, l, {bid:Math.round(bid*100)/100, ask:Math.round(ask*100)/100, mid:l.mid != null ? Math.round((bid+ask)/2*1000)/1000 : null}); };
-    const find = (date, ty, K) => { const l = f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null); return l ? adjust(l) : null; };
+    const find = (date, ty, K) => { const l = f.legs.find(l => l.sym === q.ticker && l.date === date && l.type === ty && Math.abs(l.K - K) < 1e-6 && l.bid != null && l.ask != null && l.ask > 0); return l ? adjust(l) : null; };
     let mark, iv, txt;
     const M = l => l.mid != null ? l.mid : (l.bid + l.ask)/2, ba = l => '（Bid ' + prem(l.bid) + '／Ask ' + prem(l.ask) + '）';
     if (q.type === 'CAL'){

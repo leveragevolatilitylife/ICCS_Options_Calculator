@@ -93,11 +93,12 @@ def leg_quotes(chains_raw, legs):
         if not d: continue
         for o in d.get('options', []):
             m = OCC.match(o.get('option', ''))
-            if not m or m.group(3) != ty: continue
+            if not m or m.group(3) != ty or m.group(1) != tk: continue  # 排除 SPYW、SPY1 等不同根代號的合約
             if '20%s-%s-%s' % (m.group(2)[:2], m.group(2)[2:4], m.group(2)[4:6]) != date: continue
             if abs(int(m.group(4)) / 1000 - K) > 1e-6: continue
             bid, ask, iv = f(o.get('bid')), f(o.get('ask')), f(o.get('iv'))
             mid = round((bid + ask) / 2, 4) if bid is not None and ask is not None and ask > 0 else None
+            if not (ask and ask > 0): continue  # 沒有報價的不收，避免蓋掉真正的報價
             out.append({'sym': tk, 'date': date, 'type': ty, 'K': K, 'bid': bid, 'ask': ask, 'mid': mid, 'iv': round(iv * 100, 2) if iv else None})
     return out
 
