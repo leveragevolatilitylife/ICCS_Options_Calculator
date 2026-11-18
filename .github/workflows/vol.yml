@@ -16,5 +16,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/vol.json
-          git diff --cached --quiet || (git commit -m "Update volatility data" && git pull --rebase -q && git push)
+          cp data/vol.json "$RUNNER_TEMP/vol.json"
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            cp "$RUNNER_TEMP/vol.json" data/vol.json
+            git add data/vol.json
+            git diff --cached --quiet && exit 0
+            git commit -q -m "Update volatility data"
+            git push -q origin HEAD:main && exit 0
+            sleep $((i * 3))
+          done
+          exit 1
